@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+********************************************************************************
+================================================================================
+   ホクコウ共通プログラム
+================================================================================
+   Program Number  : HKC31300.mxml
+   Program Name    : 金融機関データ設定
+   Program Date    : 2007/10/23
+   Programmer      : 山本
+
+===< Update History >===========================================================
+  2008/09/18:山本監修｡
+  2009/01/13:AIR化｡														= 山 本 
+================================================================================
+********************************************************************************
+-->
+
+<hc:HK_TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+	xmlns:hc="HK_Common.HK_Control.*"
+	xmlns:hs="HK_Common.HK_S2Flex2.*"
+	xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+	creationComplete="creationCompleteHK_TitleWindow(event)"
+	layout="absolute" width="685" height="319" title="金融機関データ設定" styleMode="main" 
+	closingMessage="true" showHelpButton="true">
+	
+	<hs:HK_S2Flex2Service id="HKC31300J" destination="HKC31300" owner="{this}"/>
+	<hs:HK_S2Flex2Service id="HKC31301J" destination="HKC31301" owner="{this}"/>
+	<hs:HK_S2Flex2Service id="HKC31302J" destination="HKC31302" owner="{this}"/>
+	
+	<mx:Script>
+	    <![CDATA[
+			import mx.controls.*;
+			import mx.collections.*;
+			import mx.rpc.events.ResultEvent;
+			import HK_Common.HK_S2Flex2.*;
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Data.*;
+			import HK_Common.HK_IO.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import mx.managers.PopUpManager;
+			import mx.controls.dataGridClasses.*;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			
+			<!--
+			************************************************************************
+			***  Private 変数
+			************************************************************************
+			-->
+			private var _strUpdateDate:String;
+			
+			<!--
+			************************************************************************
+			***  フォームイベント
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- フォームが表示された時の処理                                    -->
+		    <!--=================================================================-->
+			private function creationCompleteHK_TitleWindow(event:FlexEvent):void {
+				this._initForm();
+			}
+		 	
+			<!--
+			************************************************************************
+			***  ボタンイベント
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- クリアボタンを押下した時の処理                                  -->
+		    <!--=================================================================-->
+			private function _clickBtnEscape():void { 
+				var msg:HK_MsgBox;
+				
+				if (this.readState != ReadState.ReadBefore){
+					msg = new HK_MsgBox(StyleMode.MsgWarning,this,"ｸﾘｱ確認",MsgButton.YesNo);
+					msg.message = "画面に表示しているデータを\u000d" + 
+					 			  "クリアしてもよろしいですか？";
+					msg.cmdYes = this._initForm;
+					msg.open();
+				}else{
+					this._initForm();
+				}
+			}
+			
+		    <!--=================================================================-->
+			<!-- 書込ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnStore():void { 
+				if (this.checkAllData() != 0) {
+					return;
+				}
+				this._start_storeA12_Bank();
+			}
+		 	
+		    <!--=================================================================-->
+			<!-- 終了ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnEnd():void {
+				this.close();
+			}
+			
+			<!--
+			************************************************************************
+			***  Private メソッド
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- 初期化処理                                                      -->
+		    <!--=================================================================-->
+			private function _initForm():void{
+
+				this.enabled = true;
+				this.readState = ReadState.ReadBefore;
+				this.setAllEnabled();
+				this.clearAllError();
+				this.clearAllData();
+				this.helpCode = null;
+
+				_start_readA01_System();
+
+				BankFile.setFocus();
+			}
+			
+		    <!--=================================================================-->
+			<!-- データベースとの照合開始処理(.checkAllData()では動作しない)     -->
+		    <!--=================================================================-->
+			override public function checkRemote(uicCtrl:UIComponent) : String {
+				var objArgs:Object = new Object();
+				
+				return "";
+			}
+			
+		    <!--=================================================================-->
+			<!-- データベースとの照合終了処理                                    -->
+		    <!--=================================================================-->
+			override public function checkRemoteData(
+					uicCtrl:UIComponent, 
+					event:ResultEvent
+				) : String {
+				var expData:Array = event.result as Array;
+				
+				return "";
+			}
+			
+			<!--
+			************************************************************************
+			***  データベースアクセス
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- 書込開始確認処理                                                -->
+		    <!--=================================================================-->
+			private function _start_storeA12_Bank():void{
+				var msg:HK_MsgBox;
+				
+				msg = new HK_MsgBox(StyleMode.MsgWarning, this, "開始確認", MsgButton.YesNo);
+				msg.message = "金融機関データの受入を行ってもよろしいですか...?";
+				msg.cmdYes = this._check_BankFile;
+				msg.cmdNo = this._initForm;
+				msg.open();
+			}
+		    <!--=================================================================-->
+			<!-- テキストファイルチェック依頼処理                                -->
+		    <!--=================================================================-->
+			private function _check_BankFile():void{
+				var expFile:HK_File = new HK_File(this);
+				
+				this.enabled = false;
+				InfoMsg.text = "銀行ﾃﾞｰﾀのﾁｪｯｸを行っています。";
+				
+				expFile.logicClass = "hkc.HKC31301";
+				expFile.clearCondition();
+				expFile.addCondition("BankFile", BankFile.text);
+				expFile.addCondition("BranchFile", BranchFile.text);
+				
+				expFile.addCondition("User", this.userID);
+				expFile.addCondition("Term", this.termID);
+				expFile.addCondition("ReadState", this.readState);
+				
+				expFile.upload(BankFile.text, this._check_BankFile_completed);
+			}
+		    <!--=================================================================-->
+			<!-- テキストファイルチェック  終了処理                              -->
+		    <!--=================================================================-->
+			public function _check_BankFile_completed( State:String, strTempFile:String ):void{
+				var expFile:HK_File = new HK_File(this);
+				var msg:HK_MsgBox;
+				var strWk:String;
+				
+				strWk = "";
+				switch(State){
+					case "ok":
+						InfoMsg.text = "銀行支店ﾃﾞｰﾀのﾁｪｯｸを行っています。";
+						expFile.logicClass = "hkc.HKC31302";
+						expFile.clearCondition();
+						expFile.addCondition("BankFile", BankFile.text);
+						expFile.addCondition("BranchFile", BranchFile.text);
+						
+						expFile.addCondition("User", this.userID);
+						expFile.addCondition("Term", this.termID);
+						expFile.addCondition("ReadState", this.readState);
+						
+						expFile.upload(BranchFile.text, this._check_BranchFile_completed);
+						break;
+					case "ng":
+						msg = new HK_MsgBox(StyleMode.MsgError,this,"エラー確認", MsgButton.Ok);
+						msg.message = strTempFile;
+						msg.cmdOk = this._initForm;
+						msg.open();
+						break;
+				}
+			}
+			public function _check_BranchFile_completed( State:String, strTempFile:String ):void{
+				var expFile:HK_File = new HK_File(this);
+				var msg:HK_MsgBox;
+				var strWk:String;
+			
+				strWk = "";
+				switch(State){
+					case "ok":
+						InfoMsg.text = "銀行ﾃﾞｰﾀの書込を行っています。";
+						expFile.logicClass = "hkc.HKC31303";
+						expFile.clearCondition();
+						expFile.addCondition("BankFile", BankFile.text);
+						expFile.addCondition("BranchFile", BranchFile.text);
+						
+						expFile.addCondition("User", this.userID);
+						expFile.addCondition("Term", this.termID);
+						expFile.addCondition("ReadState", this.readState);
+						
+						expFile.upload(BankFile.text, this._store_BankFile_completed);
+						break;
+					case "ng":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError,this,"エラー確認", MsgButton.Ok);
+						msg.message = strTempFile;
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+			public function _store_BankFile_completed( State:String, strTempFile:String ):void{
+				var expFile:HK_File = new HK_File(this);
+				var msg:HK_MsgBox;
+				var strWk:String;
+			
+				strWk = "";
+				switch(State){
+					case "ok":
+						InfoMsg.text = "銀行支店ﾃﾞｰﾀの書込を行っています。";
+						expFile.logicClass = "hkc.HKC31304";
+						expFile.clearCondition();
+						expFile.addCondition("BankFile", BankFile.text);
+						expFile.addCondition("BranchFile", BranchFile.text);
+						
+						expFile.addCondition("User", this.userID);
+						expFile.addCondition("Term", this.termID);
+						expFile.addCondition("ReadState", this.readState);
+						
+						expFile.upload(BranchFile.text, this._store_BranchFile_completed);
+						break;
+					case "ng":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError,this,"エラー確認", MsgButton.Ok);
+						msg.message = strTempFile;
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 書込終了処理                                                    -->
+		    <!--=================================================================-->
+			public function _store_BranchFile_completed(  State:String, strTempFile:String ):void{
+				var msg:HK_MsgBox;
+				
+				switch(State){
+					case "ok":
+						msg = new HK_MsgBox(StyleMode.MsgInfo,this,"終了確認", MsgButton.Ok);
+						msg.message = "金融機関データの受入が完了しました。";
+						msg.cmdOk = this._initForm;
+						msg.open();
+						break;
+					case "ng":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError,this,"排他制御エラー", MsgButton.Ok);
+						msg.message = strTempFile;
+						msg.open();
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError,this,"ＤＢエラー", MsgButton.Ok);
+						msg.message = strTempFile;
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+			
+	        <!--=================================================================-->
+			<!--   システム管理表の読込処理                                      -->
+	        <!--=================================================================-->
+			private function _start_readA01_System():void{
+				var objArgs:Object = new Object();
+				
+				objArgs["A01_SysCD"] = "HCK00011";
+				
+				this.HKC31300J.readA01_System(new Array(objArgs));
+			}
+			public function _onResult_readA01_System( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						BankFile.text = expData[1][0]["BankFile"];
+						BranchFile.text = expData[1][0]["BranchFile"];
+						break;
+					case "nodata":
+						BankFile.setFocus();
+						break;
+					case "error":
+						this.closingMessage = false;
+						var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError,this,"読込エラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+					}
+			}
+		]]>
+	</mx:Script>
+	
+	<!--
+	************************************************************************
+	***  画面デザイン
+	************************************************************************
+	-->
+	<mx:Canvas x="13" y="12" width="651" height="136" backgroundColor="#ddeeff" borderStyle="inset">
+		<hc:HK_Label text="この処理は、Ｗｅｂサイトよりダウンロードした金融機関データを" x="118" y="7" width="496"/>
+		<hc:HK_Label text="当システムの銀行表・銀行支店表に設定する処理です。"           x="101" y="28" width="481"/>
+		<hc:HK_Label text="【銀行】銀行ｺｰﾄﾞ(4桁)/ 銀行ｶﾅ名(15桁)"         x="148" y="76" width="333" fontWeight="bold"/>
+		<hc:HK_Label text="【銀行支店】銀行ｺｰﾄﾞ(4桁)/支店ｺｰﾄﾞ(3桁)/支店ｶﾅ名(15桁)"       x="116" y="102" width="488" fontWeight="bold"/>
+		<hc:HK_Label text="データ形式は、FB-Winシリーズ対応の形式です。"         x="100" y="50" width="473"/>
+	</mx:Canvas>
+    <!--=================================================================-->
+    <!-- 受入ファイルの項目定義                                          -->
+    <!--=================================================================-->
+	<hc:HK_Label text="銀行ﾌｧｲﾙ名" width="95"  x="30" y="168" textAlign="right"/>
+	<hc:HK_TextInput id="BankFile" width="450" enableTime="readbefore" 
+				inputType="char" inputMust="true" x="134" y="165" tabIndex="4" maxChars="128"/>	
+	<hc:HK_Button id="btnBankFile" label="参照" focusEnabled="false" 
+				icon2="dialog" x="588" y="163" filePathControl="{BankFile}"/>
+
+	<hc:HK_Label text="銀行支店ﾌｧｲﾙ名" width="124"  x="9" y="198" textAlign="right"/>
+	<hc:HK_TextInput id="BranchFile" width="450" enableTime="readbefore" 
+				inputType="char" inputMust="true" x="134" y="196" tabIndex="4" maxChars="128"/>	
+	<hc:HK_Button id="btnBranchFile" label="参照" focusEnabled="false" 
+				icon2="dialog" x="588" y="196" filePathControl="{BranchFile}"/>
+	<hc:HK_TextInput x="182" y="241" id="InfoMsg" width="401" maxChars="30"
+			textAlign="left" enableTime="non" 
+			inputType="char" inputChar="all" inputMust="false" 
+			color="#004080" fontWeight="bold" height="25"/>
+    <!--=================================================================-->
+    <!-- 受入ファイルの情報項目定義                                      -->
+    <!--=================================================================-->
+		
+    <!--=================================================================-->
+    <!-- ボタンの項目定義                                                -->
+    <!--=================================================================-->
+	<hc:HK_Button id="btnEscape" label="ｸﾘｱ" focusEnabled="false" click="_clickBtnEscape()" functionKey="ESC"
+		icon2="escape" x="20" y="241" tabIndex="8" shortCutKey="escape" width="74"/>
+	<hc:HK_Button id="btnStore"  label="実行" focusEnabled="false" click="_clickBtnStore()" functionKey="F9"
+		enableTime="readbefore"  icon2="store" x="102" y="241" tabIndex="9" shortCutKey="store" authMode="write"/>
+	<hc:HK_Button id="btnEnd"    label="終了" focusEnabled="false" click="_clickBtnEnd()" functionKey="F12"
+		icon2="end" x="588" y="241" tabIndex="10" shortCutKey="end"/>
+	
+	
+</hc:HK_TitleWindow>

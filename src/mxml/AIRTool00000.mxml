@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+********************************************************************************
+================================================================================
+   AIRTool
+================================================================================
+   Program Number  : AIRTool00001.lzx
+   Program Name    : パスワード入力
+   Program Date    : 2009/01/05
+   Programmer      : H.Fujimoto
+   
+===< Update History >===========================================================
+   2009/01/05 : 新規作成。
+================================================================================
+********************************************************************************
+-->
+<hc:HK_LoginTitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+	xmlns:hc="HK_Common.HK_Control.*"
+	xmlns:hs="HK_Common.HK_S2Flex2.*"
+	xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+	initialize="initializeHK_TitleWindow(event)"
+	creationComplete="creationCompleteHK_TitleWindow(event)"
+	layout="absolute" width="294" height="185" title="ログオン [AIRTool]" closingMessage="false" styleMode="main">
+
+<hs:HK_S2Flex2Service id="AIRTool00001J" destination="AIRTool00001" owner="{this}"/>
+
+<mx:Script>
+    <![CDATA[
+    	import mx.managers.IFocusManagerContainer;
+		import HK_Common.HK_Control.*;
+		import HK_Common.HK_Control.HK_ControlCnst.*;
+		import HK_Common.HK_S2Flex2.*;
+		import mx.collections.*;
+		import mx.controls.*;
+		import mx.controls.dataGridClasses.*;
+		import mx.core.Application;
+		import mx.core.UIComponent;
+		import mx.core.Window;
+		import mx.events.FlexEvent;
+		import mx.events.ModuleEvent;
+		import mx.managers.PopUpManager;
+		import mx.modules.*;
+		import mx.rpc.events.ResultEvent;
+		
+		<!--
+		************************************************************************
+		***** Private 変数
+		************************************************************************
+		-->
+		private var _numUpdateCount:Number;
+		private var _strPassWord:String;
+		private var _mdm:HK_ModuleManager = new HK_ModuleManager;
+		
+		<!--
+		************************************************************************
+		***** フォームイベント
+		************************************************************************
+		-->
+		<!--=================================================================-->
+		<!-- フォームが表示された時の処理 -->
+		<!--=================================================================-->
+		protected function initializeHK_TitleWindow(event:FlexEvent):void {
+		}
+		
+		<!--=================================================================-->
+		<!-- フォームが表示された時の処理 -->
+		<!--=================================================================-->
+		protected function creationCompleteHK_TitleWindow(event:FlexEvent):void 
+		{
+			this.readState = ReadState.ReadBefore;			
+			this.setAllEnabled();			
+		}
+		
+		<!--
+		************************************************************************
+		***** ボタンイベント
+		************************************************************************
+		-->
+		<!--=================================================================-->
+		<!-- 取消ボタンを押下した時の処理                                    -->
+		<!--=================================================================-->
+		private function _clickBtnEscape():void { 
+			this._initForm();
+		}
+		
+		<!--=================================================================-->
+		<!-- ログインボタンを押下した時の処理                                -->
+		<!--=================================================================-->
+		private function _clickBtnExcute():void 
+		{ 
+			this._start_readC04_Staff();
+		 }
+		
+		<!--
+		************************************************************************
+		***** Private メソッド
+		************************************************************************
+		-->
+		<!--=================================================================-->
+		<!-- 初期化処理                                                      -->
+		<!--=================================================================-->
+		private function _initForm():void{
+			this.readState = ReadState.ReadBefore;
+			this.setAllEnabled();
+			this.clearAllError();
+			this.clearAllData();
+			C04_CD.setFocus();
+ 		}
+		 
+		<!--
+		************************************************************************
+		***** データベースアクセス
+		************************************************************************
+		-->
+		<!--=================================================================-->
+		<!-- 読込処理                                                        -->
+		<!--=================================================================-->
+		private function _start_readC04_Staff():void{
+			var objArgs:Object = new Object();			
+			objArgs["C04_CD"] = C04_CD.text;		
+			this.userID = C04_CD.text;	
+			//this.AIRTool00001J.readC04_Staff(new Array(objArgs));
+			this._mdm.showWindow("AIRTool00001.swf", this);
+			//this._mdm.showWindow("HKC31400.swf", this);
+		}
+		
+		public function _onResult_readC04_Staff( event:ResultEvent ):void
+		{
+			var expData:Array = event.result as Array;
+			
+			switch(expData[0][0]["status"]){
+				case "existdata":
+					this._strPassWord = PJ_Data.decodePw(expData[1][0]["C04_PW"]);
+					if (this._strPassWord != "") {
+						if (this.C04_StaffPW.text != this._strPassWord) {
+							var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgWarning, this,"入力エラー", MsgButton.Ok);
+							msg.message = "正しいパスワードを入力して下さい。";
+							msg.open();
+							this.C04_StaffPW.setFocus();
+							break;
+						}
+
+						/** プログラム権限表読込処理 **/
+						this._start_readC12_PgmAuth();
+						break;
+					}
+				case "nodata":
+					var msg1:HK_MsgBox = new HK_MsgBox(StyleMode.MsgWarning, this,"読込エラー", MsgButton.Ok);
+					msg1.message = "正しい教職員コードを入力して下さい。";
+					msg1.open();
+					this._strPassWord = "";
+					this.C04_CD.setFocus();
+					break;
+				case "error":
+					var msg2:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError, this,"読込エラー", MsgButton.Ok);
+					msg2.message = expData[0][0]["info"];
+					msg2.open();
+					this._strPassWord = "";
+					this.C04_CD.setFocus();
+					break;
+			}
+		}
+		
+		<!--=================================================================-->
+		<!-- C12_PgmAuth 読込処理 -->
+		<!--=================================================================-->
+		private function _start_readC12_PgmAuth():void{
+			var objArgs:Object = new Object();
+			
+			objArgs["C04_CD"] = C04_CD.text;
+			
+			this.AIRTool00001J.readC12_PgmAuth(new Array(objArgs));
+		}
+		
+		public function _onResult_readC12_PgmAuth( event:ResultEvent ):void{
+			var expData:Array = event.result as Array;
+			var msg:HK_MsgBox;
+			
+			switch(expData[0][0]["status"]){
+				case "existdata":
+					this.readState = ReadState.ReadAfterExist;
+					this.setAllEnabled();
+					
+					this.AllPgmAuth = expData[1][0];
+					this.userID = C04_CD.text;
+					
+					//メニュー表示					
+					this._mdm.showWindow("AIRTool00001.swf", this);
+					//this.startPrintService("AIRTool印刷サービス");
+					break;
+					
+				case "nodata":
+					msg = new HK_MsgBox(StyleMode.MsgWarning, this,"権限確認", MsgButton.Ok);
+					msg.message = "このシステムを使用する権限がありません。"
+					msg.open();
+					break;
+					
+				case "error":
+					msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+					msg.message = expData[0][0]["info"];
+					msg.open();
+					break;
+			}
+		}	
+    ]]>
+</mx:Script>
+
+<!--
+************************************************************************
+***** 画面デザイン
+************************************************************************
+-->
+	<hc:HK_Label x="8" y="60" text="パスワード" width="108"  textAlign="right" height="19"/>
+	<hc:HK_TextInput x="122" y="57" id="C04_StaffPW" width="147" maxChars="15"  
+				enableTime="readbefore" 
+				inputType="char" inputChar="num,alpha"
+				inputMust="true"  tabIndex="2" displayAsPassword="true" height="25"/>
+	
+	<hc:HK_Button id="btnEscape"  label="取 消" focusEnabled="false"
+				click="_clickBtnEscape()" icon2="escape" tabIndex="7" x="28" y="105" width="100"/>
+	<hc:HK_Button x="150" id="btnStore"  label="ログイン" focusEnabled="true"
+				click="_clickBtnExcute()" icon2="read" tabIndex="3" y="105"/>
+	<hc:HK_Label x="8" y="26" text="教職員コード" width="108"  textAlign="right" height="19"/>
+	<hc:HK_TextInput x="122" id="C04_CD" width="147" maxChars="10" 
+				enableTime="readbefore" 
+				inputType="char" inputChar="num,alpha" casing="upper"
+				inputMust="true" showHelp="false" tabIndex="1" height="25" y="24"/>
+</hc:HK_LoginTitleWindow>

@@ -1,0 +1,134 @@
+<html lang="en">
+<!-- 2009/08/18 : Javaのﾊﾞｰｼﾞｮﾝﾁｪｯｸ機能を追加 -->
+<!-- 2009/08/18 : Flashが無かった時のﾒｯｾｰｼﾞを変更 -->
+<!-- 2010/04/03 : ﾌﾞﾗｳｻﾞ判定用UserAgentをｻｰﾊﾞｰから取得する -->
+
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<title>$[SYSNM] 起動画面</title>
+		
+		<!-- 2010/04/03 INSERT START -->
+		<script src="./servlet/UserAgent" language="javascript"></script>
+		<!-- 2010/04/03 INSERT E N D -->
+		
+		<script src="./bin/AC_OETags.js" language="javascript"></script>
+		<script src="./bin/deployJava.js" language="javascript"></script>
+		<style>
+			body { overflow:hidden }
+			object {position:absolute;left:0px;top:0px}
+			embed {position:absolute;left:0px;top:0px}			
+		</style>
+
+		<script language=JavaScript>
+			function JS_InitComplete() {
+				setText(document.getElementById("id_status1"), "印刷サービスを起動しています。");
+				setText(document.getElementById("id_status2"), "");
+				
+				if ("$[ERR_FLG]" != "OK") {
+					setText(document.getElementById("id_status1"), "起動引数が未指定です。");
+					return;
+				}
+				document.applets["HK_PrintService"].startPrintService('$[PATH]');
+			}
+			
+			function JS_StartPrintService_Reuslt(state, message) {
+				if (state == "started") {
+					setText(document.getElementById("id_status1"), "印刷サービスを起動しました。");
+					setText(document.getElementById("id_status2"), "ブラウザの「×」ボタンでこの画面を閉じてください。");
+					close_win();
+				} else {
+					setText(document.getElementById("id_status1"), message);
+				}
+			}
+			
+			function setText(el, text){
+				if (el.textContent != "undefined" && el.textContent != undefined) {
+					el.textContent = text;
+				} else {
+					el.innerText = text;
+				}
+			}
+			
+			//Copyright http://d.hatena.ne.jp/masahiror/20051101/p1
+			function close_win(){
+				var nvua = navigator.userAgent;
+				if(nvua.indexOf('MSIE') >= 0){
+					if(nvua.indexOf('MSIE 5.0') == -1) {
+						top.opener = '';
+					}
+				} else if(nvua.indexOf('Gecko') >= 0){
+					top.name = 'CLOSE_WINDOW';
+					setTimeout
+					wid = window.open('','CLOSE_WINDOW');
+				}
+				top.close();
+			}
+			<!-- 2009/08/18 INSERT START -->
+			function checkJRE_Version(version) {
+				var strResult = deployJava.versionCheck(version + "");
+				return strResult + "";
+			}
+			function install_latestJRE() {
+	            if (deployJava.isPluginInstalled() + "" == "false") {
+					alert("この後、Javaのｲﾝｽﾄｰﾙの為に別のﾍﾟｰｼﾞに自動的に移動します。\n\n"
+					    + "ｲﾝｽﾄｰﾙが終わりましたら、\n"
+					    + "一度、ﾌﾞﾗｳｻﾞを閉じて、再度ｼｽﾃﾑへﾛｸﾞｲﾝし直して下さい。");
+			    } else {
+			    	deployJava.returnPage = document.location;
+					alert("この後、Javaのｲﾝｽﾄｰﾙを開始します。\n\n"
+					    + "ｲﾝｽﾄｰﾙが終わりましたら、\n"
+					    + "一度、ﾌﾞﾗｳｻﾞを閉じて、再度ｼｽﾃﾑへﾛｸﾞｲﾝし直して下さい。");
+			    }
+			    deployJava.installLatestJRE();
+			}
+			<!-- 2009/08/18 INSERT E N D -->
+		</script>
+	</head>
+
+	<body scroll="no">
+		<table bgcolor="#ECE9D8" border="1" align="center" width="400">
+			<tr>
+				<td align="center">
+					<br>
+					<span id="id_sysnm">【 $[SYSNM] 】</span><br>
+					<br>
+					<span id="id_status1">印刷サービスを起動しています。</span><br>
+					<span id="id_status2"></span><br>
+					<br>
+				</td>
+			</tr>
+		</table>
+		<div align="center" id="id_jre" style="visibility:hidden">
+			<br>
+			<button onclick="install_latestJRE()" style="height:40"><font color="red"><b>印刷機能(Java) インストール</b></font></button><br>
+			印刷機能を使用するには、Javaのインストールが必要です
+		</div>
+		
+		<script language="JavaScript" type="text/javascript">
+		<!--
+			<!-- 2009/08/18 INSERT START -->
+			var strJREResult = checkJRE_Version("1.5+");
+			if (strJREResult == "true") {
+				//JRE導入済　サービス開始へ
+				document.getElementById("id_jre").style.visibility = 'hidden';
+				
+				// load HK_PrintService applet  add by T.Ogawa 2008/12
+				HK_Applet_RunContent(
+					"name","HK_PrintService",
+					"width","0",
+					"height","0",
+					"CODE","HK_PrintService.class",
+					"ARCHIVE","./HK_PrintService.jar",
+					"CODEBASE",".",
+					"scriptable","false",	
+					"type","application/x-java-applet;version=1.5",				
+					"pluginspage","http://java.sun.com/products/plugin/index.html#download");		
+			} else {
+				//JRE未導入　JREインストールボタン表示
+				document.getElementById("id_jre").style.visibility = 'visible';
+			}
+			<!-- 2009/08/18 INSERT E N D -->
+			// -->
+		</script>
+	</body>
+</html>

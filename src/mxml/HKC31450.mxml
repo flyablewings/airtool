@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	 ********************************************************************************
+	 ================================================================================
+	 テーブルリスト
+	 ================================================================================
+	 Program Number  : HKC31450.mxml
+	 Program Name    : View tool table list(ビュー削除)
+	 Program Date    : 2009/04/10
+	 Programmer      : linhnq
+
+	 ===< Update History >===========================================================
+	 2009/04/10:Start											         = linhnq
+	 ================================================================================
+	 ********************************************************************************
+-->
+
+<hc:HK_TitleWindow showHelpButton="true"
+				   layout="absolute"
+				   width="244"
+				   height="369"
+				   title="ビュー削除"
+				   closingMessage="true"
+				   styleMode="print"
+				   xmlns:mx="http://www.adobe.com/2006/mxml"
+				   xmlns:hc="HK_Common.HK_Control.*"
+				   xmlns:hs="HK_Common.HK_S2Flex2.*"
+				   xmlns:newList="com.controls.list.*"
+				   xmlns:ns1="com.controls.*"
+				   creationComplete="creationCompleteHK_TitleWindow(event)" resizable="true" storeWindowSize="true">
+	<hs:HK_S2Flex2Service id="HKC31400J"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<mx:Script>
+		<![CDATA[
+			//import mx.automation.tabularData.ListTabularData;
+			import com.objects.data.Table;
+			import com.objects.data.Column;
+			import mx.rpc.soap.WebService;
+			import mx.rpc.events.FaultEvent;
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import HK_Common.HK_Control.HK_ControlCnst.ReadState;
+			import HK_Common.HK_Data.*
+			import HK_Common.HK_S2Flex2.*;
+			import mx.collections.*;
+			import mx.controls.*;
+			import mx.controls.dataGridClasses.*;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+			private var _arrAllItems:Array;
+			<!--
+		************************************************************
+		***** Private 変数
+		************************************************************
+		-->
+			private var mdm:HK_ModuleManager;
+
+			<!--
+		************************************************************
+		***** フォームイベント
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- フォームが表示された時の処理                               -->
+			<!--============================================================-->
+
+			protected function creationCompleteHK_TitleWindow(event:FlexEvent):void
+			{
+				this._initForm();
+			}
+
+			<!--============================================================-->
+			<!-- GridでのKeyDownが発生したとき                              -->
+			<!--============================================================-->
+
+			override public function keyDownCell(event:KeyboardEvent):void
+			{
+			}
+
+			<!--
+        ************************************************************
+        ***** SubForm イベント
+        ************************************************************
+        -->
+			<!--============================================================-->
+			<!-- 検索マークがクリックされた時の処理                         -->
+			<!--============================================================-->
+
+			override public function clickHelp(uicCtrl:UIComponent):void
+			{
+
+				return;
+			}
+
+			<!--=============================================================-->
+			<!-- 子フォームが閉じられ、自フォームへFocusが戻ってきた時の処理 -->
+			<!--=============================================================-->
+
+			override public function closeSubWindow(tlwWindow:HK_TitleWindow, uicInputControl:UIComponent):void
+			{
+
+			}
+
+			private function _clickBtnCheckAll():void
+			{
+				if (listView.rowCount > 0)
+				{
+					for (var i:int=0; i < listView.rowCount; i++)
+					{
+						listView.selectedIndex=i;
+					}
+				}
+			}
+
+			private function _clickBtnUnCheckAll():void
+			{
+				listView.selectedIndex=-1;
+			}
+
+			private function _clickBtnDelete():void
+			{
+				var arrSelectedItems:Array=listView.selectedItems;
+				if (arrSelectedItems != null && arrSelectedItems.length > 0)
+				{
+					var strViewName:String="";
+					for (var i:int=0; i < arrSelectedItems.length; i++)
+					{
+						strViewName+=arrSelectedItems[i]["viewname"].toString() + ";";
+					}
+					if (strViewName != "")
+					{
+						strViewName=strViewName.substring(0, strViewName.length - 1);
+
+						var objArgs:Object=new Object();
+						objArgs["viewname"]=strViewName;
+						this.HKC31400J.deleteViewSql(new Array(objArgs));
+					}
+				}
+			}
+
+			public function _onResult_deleteViewSql(event:ResultEvent):void
+			{
+				var msg:HK_MsgBox;
+				var expData:Array=event.result as Array;
+				msg=new HK_MsgBox(StyleMode.MsgInfo, this, "読込エラー", MsgButton.Ok);
+				msg.message="ビューの削除が完了しました｡"
+				msg.open();
+				//remove selected
+				var arrSelectedItems:Array=listView.selectedItems;
+				var i:int=0;
+				var j:int=0;
+				for (i=arrSelectedItems.length - 1; i >= 0; i--)
+				{
+					for (j=_arrAllItems.length - 1; j >= 0; j--)
+					{
+						if (arrSelectedItems[i] == _arrAllItems[j])
+						{
+							_arrAllItems.splice(j, 1);
+						}
+					}
+				}
+				listView.dataProvider=_arrAllItems;
+			}
+
+			<!--============================================================-->
+			<!-- 終了ボタンを押下した時の処理                               -->
+			<!--============================================================-->
+
+			private function _clickBtnEnd():void
+			{
+				this.close();
+			}
+
+			<!--
+		************************************************************
+		***** Private メソッド
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- 初期化処理                                                 -->
+			<!--============================================================-->
+
+			private function _initForm():void
+			{
+				var objArgs:Object=new Object();
+				//objArgs["tablename"] = tablenames;
+				this.HKC31400J.readViewSql(new Array(objArgs));
+			}
+
+			public function _onResult_readViewSql(event:ResultEvent):void
+			{
+				var arrViews:Array=event.result as Array;
+				_arrAllItems=arrViews[1];
+				this.listView.dataProvider=_arrAllItems;
+				this.setAllEnabled();
+			}
+
+			<!--============================================================-->
+			<!-- Gridのデータチェック処理(this.checkAllData()でも動作)     -->
+			<!--============================================================-->
+
+			override public function checkInputDataGrid(grd:HK_DataGrid, dgcActive:HK_DataGridCell, numRowIndex:Number, strDataField:String):String
+			{
+
+				return "";
+			}
+
+			<!--============================================================-->
+			<!-- Grid:1件のレコ一ドも入力されていない場合                   -->
+			<!--============================================================-->
+
+			private function _checkIsBlankGrid():Boolean
+			{
+				return false;
+			}
+
+
+			<!--=================================================================-->
+			<!-- 各コントロールのデータチェック処理(this.checkAllData()でも動作) -->
+			<!--=================================================================-->
+
+			override public function checkGridRemote(grd:HK_DataGrid, numRowIndex:Number, strDataField:String):String
+			{
+
+				return "";
+			}
+
+			<!--============================================================-->
+			<!-- [Grid]データベースとの照合終了処理                         -->
+			<!--============================================================-->
+
+			override public function checkGridRemoteData(grd:HK_DataGrid, numRowIndex:Number, strDataField:String, event:ResultEvent):String
+			{
+
+				return "";
+			}
+		]]>
+	</mx:Script>
+	<hc:HK_Button id="btnDelete"
+				  label="削除"
+				  click="_clickBtnDelete()"
+				  enableTime="readbefore"
+				  tabIndex="3"
+				  tabEnabled="true"
+				  shortCutKey="read"
+				  left="6"
+				  bottom="6" icon2="delete"/>
+	<hc:HK_Button id="btnEnd"
+				  label="戻る"
+				  focusEnabled="false"
+				  icon2="return"
+				  functionKey="F12"
+				  click="_clickBtnEnd()"
+				  shortCutKey="end"
+				  tabIndex="11"
+				  right="6"
+				  bottom="6"/>
+	<newList:CheckboxList id="listView"
+						  labelField="viewname"
+						  left="0"
+						  right="0"
+						  top="36"
+						  bottom="37"
+						  color="#000000"
+						  itemRenderer="com.controls.checkbox.CheckBoxRenderer"
+						  allowMultipleSelection="true"
+						  doubleClickEnabled="false">
+	</newList:CheckboxList>
+	<hc:HK_Button id="btnCheckAll"
+				  label="全て選択"
+				  click="_clickBtnCheckAll()"
+				  enableTime="readbefore"
+				  tabIndex="3"
+				  tabEnabled="true"
+				  shortCutKey="read"
+				  left="10"
+				  icon2="enter" top="6" height="25"/>
+	<hc:HK_Button id="btnUnCheckAll"
+				  label="全て解除"
+				  click="_clickBtnUnCheckAll()"
+				  enableTime="readbefore"
+				  tabIndex="3"
+				  tabEnabled="true"
+				  shortCutKey="read"
+				  left="125"
+				  icon2="no" top="6" height="25"/>
+</hc:HK_TitleWindow>

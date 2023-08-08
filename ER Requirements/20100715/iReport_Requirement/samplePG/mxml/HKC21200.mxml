@@ -1,0 +1,1314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+********************************************************************************
+================================================================================
+      ホクコウ共通プログラム
+================================================================================
+   Program Number  : HKC21200.mxml
+   Program Name    : 帳票作成
+   Program Date    : 2008/02/12
+   Programmer      : T.OHORI
+   
+===< Update History >===========================================================
+  2008/10/25:HK_MsgBoxの引数の変更｡										= 山本
+  2008/10/26:基本仕様を変更とcsvﾌｧｲﾙ化を施す｡							= 山本
+  2009/01/13:AIT化｡														= 山本
+================================================================================
+********************************************************************************
+-->
+
+<hc:HK_TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+	xmlns:hc="HK_Common.HK_Control.*"
+	xmlns:hs="HK_Common.HK_S2Flex2.*"
+	xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+	creationComplete="creationCompleteHK_TitleWindow(event)"
+	layout="absolute" width="914" height="626" title="帳票作成" styleMode="main" closingMessage="true">
+
+	<hs:HK_S2Flex2Service id="HKC21200J" destination="HKC21200" owner="{this}"/>
+	
+	<mx:Script>
+	    <![CDATA[
+	    	import mx.containers.Grid;
+	    	import mx.containers.Box;
+			import HK_Common.HK_Control.HK_ControlCnst.ReadState;
+			import mx.controls.*;
+			import mx.collections.*;
+			import mx.rpc.events.ResultEvent;
+			import HK_Common.HK_S2Flex2.*;
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import HK_Common.HK_Data.*;
+			import HK_Common.HK_IO.*;
+			import mx.managers.PopUpManager;
+			import mx.controls.dataGridClasses.*;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+		
+			<!--
+			************************************************************************
+			***  Private 変数
+			************************************************************************
+			-->
+			private var mdm:HK_ModuleManager = new HK_ModuleManager;
+			private var _strUpdateDate:String;
+			private var _numSyoriFlg:Number;		/** 処理の呼出元 0-印刷､1-Excel保存    */
+			private var _intPrintNum_S:int;
+			private var _intPrintNum_E:int;
+			
+			private var _aryTableCol:Array = new Array();		/** ﾃｰﾌﾞﾙ列名              */
+			private var _aryReportCol:Array = new Array();		/** ﾚﾎﾟｰﾄﾙ列名             */
+			private var _aryJyokenAtai:Array = new Array();	/** 条件節の値の格納用     */
+			private var _strPrintExcel_SQL:String = "";		/** 印刷/Excel保存用SQL文  */
+			private var _strCsvFL:String = ""; 				/** 印刷用csvﾌｧｲﾙ名        */
+			private var _strSheetFL:String = ""; 				/** Excel保存用ｼｰﾄ名ﾌｧｲﾙ   */
+		
+			<!-- 
+			************************************************************************
+			***  Private 定数
+			************************************************************************
+			-->
+			private const _csnumLblWidth:Number = 80;
+			private const _csnumSprCountRow:Number = 15;
+				
+			<!--
+			************************************************************************
+			***  フォームイベント
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- フォームが表示された時の処理　　　　　　　　　　   　　　　　　 -->
+		    <!--=================================================================-->
+			private function creationCompleteHK_TitleWindow(event:FlexEvent):void {
+				this._initForm();
+				this._start_readTable_List();	/** ﾃｰﾌﾞﾙ情報とﾌｧｲﾙ情報の取得    */
+			}
+		    <!--=================================================================-->
+			<!-- GridでのKeyDownが発生したとき                                   -->
+		    <!--=================================================================-->
+           	override public function keyDownCell(event:KeyboardEvent):void{
+           		var numRow:Number;
+           		var numCol:Number;
+           		
+           		switch(event.currentTarget.id){
+           			case "spr_Data":
+						if (event.keyCode == Keyboard.TAB || event.keyCode == Keyboard.ENTER){
+							numRow = spr_Data.activeRowIndex;
+							numCol = spr_Data.activeColumnIndex;
+							if (numCol > 0){
+								if (event.shiftKey){
+									if (numRow != 0 || numCol != 1){
+										spr_Data.moveCell(MoveCellType.PrevCol);
+									}
+								} else {
+									if (numRow != spr_Data.rowAllCount-1 || numCol != spr_Data.columnAllCount-1){
+										spr_Data.moveCell(MoveCellType.NextCol);
+									}
+								}
+							}
+						}
+           				break;
+           			case "spr_Jyoken":
+						if (event.keyCode == Keyboard.TAB || event.keyCode == Keyboard.ENTER){
+							numRow = spr_Jyoken.activeRowIndex;
+							numCol = spr_Jyoken.activeColumnIndex;
+							if (event.shiftKey){
+								if (numRow != 0 || numCol != 0){
+									spr_Jyoken.moveCell(MoveCellType.PrevCol);
+								}
+							} else {
+								if (numRow == spr_Jyoken.rowAllCount-1 && numCol == spr_Jyoken.columnAllCount-1){
+									spr_Jyoken.addRow(spr_Jyoken.rowAllCount);
+									spr_Jyoken.moveCell(MoveCellType.NextCol);
+								} else {
+									spr_Jyoken.moveCell(MoveCellType.NextCol);
+								}
+							}
+						}
+           				break;
+           		}
+           	}
+			
+			<!--
+			************************************************************************
+		    ***  SubForm イベント
+			************************************************************************
+		    -->
+		    <!--=================================================================-->
+			<!-- 検索マークがクリックされた時の処理                              -->
+		    <!--=================================================================-->
+			override public function clickHelp(uicCtrl:UIComponent):void {
+				var objHelpCode:Object;
+
+				switch(uicCtrl.id){
+					case A15_RptFormatCD.id:
+						mdm.showWindow("HKC21210.swf", this, uicCtrl);
+						break;
+				}
+				return;
+			}
+			<!--=================================================================-->
+			<!-- 子フォームが閉じられ、自フォームへFocusが戻ってきた時の処理     -->
+		    <!--=================================================================-->
+			override public function closeSubWindow(
+						tlwWindow:HK_TitleWindow, 
+						uicInputControl:UIComponent
+				) : void {
+		
+				if (this.helpCode != null){
+					uicInputControl.setFocus();
+					switch (uicInputControl.id){
+						case A15_RptFormatCD.id:
+							A15_RptFormatCD.text = this.helpCode["A15_RptFormatCD"];
+							break;
+					}
+					uicInputControl.dispatchEvent(
+						new KeyboardEvent(KeyboardEvent.KEY_DOWN, true, false, 0, Keyboard.ENTER)
+					);
+				}
+				this.helpCode = null;
+			}
+				
+			<!--
+			************************************************************************
+			***  ボタンイベント
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- 取消ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnEscape():void {
+				var msg:HK_MsgBox;
+				
+				if (this.readState != "before") {
+					msg = new HK_MsgBox(StyleMode.MsgWarning, this, "ｸﾘｱ確認", MsgButton.YesNo);
+					msg.message = "画面に表示しているデータを\u000d" + 
+					 			  "クリアしてもよろしいですか？";
+					msg.cmdYes = this._initForm;
+					msg.open();					
+				}else{
+					this._initForm();
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 読込ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnRead():void { 
+	            if (this.checkAllData() != 0){
+	                return;
+	            }
+ 				this._start_readA15_RptFormat();
+			}
+		    <!--=================================================================-->
+			<!-- 書込ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnStore():void { 
+				var msg:HK_MsgBox;
+	            if (this.checkAllData() != 0){
+	                return;
+	            }
+	            if (_check_SprData_Table_Col() == false){
+					msg = new HK_MsgBox(StyleMode.MsgWarning, this,"入力ミス", MsgButton.Ok);
+					msg.message = "ﾃｰﾌﾞﾙ/ﾋﾞｭｰ項目が選択されていません。";
+					msg.open();
+	            	return 
+	            }
+		        this._start_storeA15_RptFormat();
+			}
+		    <!--=================================================================-->
+			<!-- 削除ボタンを押下した時の処理                                    -->
+	   		<!--=================================================================-->
+			private function _clickBtnDelete():void { 
+				var msg:HK_MsgBox;
+			
+				msg = new HK_MsgBox(StyleMode.MsgWarning, this, "削除確認", MsgButton.YesNo);
+				
+				msg.message = "削除してよろしいですか？\u000d\u000d" +
+						      "　コード:" + A15_RptFormatCD.text + "\u000d" +
+						      "　帳票名:" + A15_RptFormatNM.text;
+				msg.cmdYes = this._start_deleteA15_RptFormat;
+				msg.open();
+			}
+		    <!--=================================================================-->
+			<!-- 印刷ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnPrint( event:MouseEvent ):void { 
+				var msg:HK_MsgBox;
+				
+	            if (this.checkAllData() != 0){
+	                return;
+	            }
+	            if (_check_SprData_Table_Col() == false){
+					msg = new HK_MsgBox(StyleMode.MsgWarning, this,"入力ミス", MsgButton.Ok);
+					msg.message = "ﾃｰﾌﾞﾙ/ﾋﾞｭｰ項目が選択されていません。";
+					msg.open();
+	            	return 
+	            }
+	            _numSyoriFlg = 0;
+		        this._start_Atai_Edit();
+			}
+		    <!--=================================================================-->
+			<!-- Excel保存ボタンを押下した時の処理                               -->
+		    <!--=================================================================-->
+			private function _clickBtnExcel():void {
+				var msg:HK_MsgBox;
+	            if (this.checkAllData() != 0){
+	                return;
+	            }
+	            if (_check_SprData_Table_Col() == false){
+					msg = new HK_MsgBox(StyleMode.MsgWarning, this,"入力ミス", MsgButton.Ok);
+					msg.message = "ﾃｰﾌﾞﾙ/ﾋﾞｭｰ項目が選択されていません。";
+					msg.open();
+	            	return 
+	            }
+	            _numSyoriFlg = 1;
+		        this._start_Atai_Edit();
+			}
+		    <!--=================================================================-->
+			<!-- 終了ボタンを押下した時の処理                                    -->
+		    <!--=================================================================-->
+			private function _clickBtnEnd():void {
+				this.close();
+			}
+		    <!--=================================================================-->
+			<!-- ﾚﾎﾟｰﾄ項目に対してﾃｰﾌﾞﾙ項目が選択されているかをﾁｪｯｸする処理      -->
+		    <!--=================================================================-->
+			private function _check_SprData_Table_Col():Boolean{
+				var numIdx:Number = 0;
+				var strCol:String;
+				var strWk:String;
+				var blnChk:Boolean = false;
+				
+				for (numIdx=0; numIdx < spr_Data.rowAllCount; numIdx++) {
+			    	strCol = spr_Data.cell(numIdx, 'Table_Col').text;
+			    	strWk = HK_Data.trim(strCol);
+			    	if (strWk.length != 0){
+			    		blnChk = true;
+			    		break;
+			    	}
+			 	}
+				return blnChk;
+			}
+			
+			<!--
+			************************************************************************
+			***  カスタムメソッド
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- フォームの初期化処理                                            -->
+		    <!--=================================================================-->
+			private function _initForm():void{
+				this.readState = ReadState.ReadBefore;
+				this.setAllEnabled();
+				this.clearAllError();
+				this.clearAllData();
+				this.helpCode = null;
+				
+				this._strUpdateDate = "";
+				Table_List.selectedIndex = -1;
+				Report_List.selectedIndex = -1;
+				spr_Data.resetRow(10);
+				spr_Jyoken.resetRow(5);
+				
+				A15_RptFormatCD.setFocus();
+			}
+			<!--=================================================================-->
+			<!-- 各コントロールのデータチェック処理(.checkAllData()でも動作)     -->
+			<!--=================================================================-->
+			override public function checkInputData(uicCtrl:UIComponent):String { 
+				switch (uicCtrl.id) {
+					case Report_List.id:
+						break;
+					case Table_List.id:
+						break;
+					default:
+						break;
+				}
+				return ""
+			}
+			<!--=================================================================-->
+			<!-- データベースとの照合開始処理(.checkAllData()では動作しない)     -->
+			<!--=================================================================-->
+			override public function checkRemote(uicCtrl:UIComponent):String { 
+				var objArgs:Object = new Object();
+				var msg:HK_MsgBox;
+				var strWk:String = "";
+				var strMes:String = "";
+				
+				switch (uicCtrl.id) {
+					case Report_List.id:
+						if (Report_List.selectedIndex != -1){
+							/** ﾚﾎﾟｰﾄの列名を取得してspr_Dataに表示する｡            */
+							_readReport_Column();
+						}
+						break;
+					case Table_List.id:
+						if (Table_List.selectedIndex != -1){
+							/** ﾃｰﾌﾞﾙの列名を取得してspr_Dataにｺﾝﾎﾞﾎﾞｯｸｽで表示する｡ */
+							_readTable_Column();
+						}
+						break;
+					default:
+						break;
+			    }
+				return "";
+			}
+			
+			<!--=================================================================-->
+			<!-- データベースとの照合終了処理                                    -->
+			<!--=================================================================-->
+			override public function checkRemoteData(
+						uicCtrl:UIComponent, 
+						event:ResultEvent
+				):String { 
+				var expData:Array = event.result as Array;
+				
+				switch (uicCtrl.id){
+					case Report_List.id:
+					case Table_List.id:
+						switch (expData[0][0]["status"]) {
+							case "existdata":
+								break;
+							case "nodata":
+							case "error":
+								return expData[0][0]["info"]
+								break;
+						}
+						break;
+					default:
+						break;
+				}
+				return "";
+			}
+			
+		    <!--=================================================================-->
+			<!-- Gridのデータチェック処理(.checkAllData()でも動作)               -->
+		    <!--=================================================================-->
+			override public function checkInputDataGrid(
+						grd:HK_DataGrid,
+			            dgcActive:HK_DataGridCell,
+				        numRowIndex:Number,
+				        strDataField:String
+				) : String {
+				switch(grd.id){
+					case "spr_Data":
+						switch (strDataField) {
+							case "Junjo":
+								if (grd.cell(numRowIndex,'Sort').selected == true){
+									if (dgcActive.text == "") {
+										return "順序を入力して下さい。";
+									}
+								}
+								grd.cell(numRowIndex, 'Junjo').errorString = "";
+								break;
+							case "Syurui":
+								if (grd.cell(numRowIndex,'Sort').selected == true){
+									if (dgcActive.selectedData == "") {
+										return "種類を指定して下さい。";
+									}
+								}
+								grd.cell(numRowIndex, 'Syurui').errorString = "";
+								break;
+						}
+						break;
+					case "spr_Jyoken":
+						var strColData:String;
+						strColData = grd.cell(numRowIndex,'Column_Name').selectedData;
+						if (strColData == null){ strColData = ""; }
+						
+						switch (strDataField) {
+							case "Enzanshi":
+								if (strColData != ""){
+									if (numRowIndex > 0){
+										if (dgcActive.selectedData == "") {
+											return "演算子を指定して下さい。";
+										}
+									}
+								}else{
+									grd.cell(numRowIndex, 'Enzanshi').errorString = "";
+									grd.cell(numRowIndex, 'Shiki').errorString = "";
+									grd.cell(numRowIndex, 'Atai1').errorString = "";
+									grd.cell(numRowIndex, 'Atai2').errorString = "";
+								}
+								grd.cell(numRowIndex, 'Enzanshi').errorString = "";
+								break;
+							case "Column_Name":
+								if (strColData == ""){
+									grd.cell(numRowIndex,'Enzanshi').selectedData = "";
+									grd.cell(numRowIndex,'Shiki').selectedData = "";
+									grd.cell(numRowIndex, 'Atai1').text = "";
+									grd.cell(numRowIndex, 'Atai2').text = "";
+								}
+								break;
+							case "Shiki":
+								if (strColData != ""){
+									if (dgcActive.selectedData == "") {
+										return "条件式を指定して下さい。";
+									}
+								}
+								grd.cell(numRowIndex, 'Shiki').errorString = "";
+								break;
+							case "Atai1":
+								if (strColData != ""){
+									if (dgcActive.text == "") {
+										return "値１を入力して下さい。";
+									}
+								}
+								grd.cell(numRowIndex, 'Atai1').errorString = "";
+								break;
+							case "Atai2":
+								if (strColData != ""){
+									if (grd.cell(numRowIndex,'Shiki').selectedData == "6"){
+										if (dgcActive.text == "") {
+											return "値２を入力して下さい。";
+										}
+									}
+								}
+								grd.cell(numRowIndex, 'Atai2').errorString = "";
+								break;
+						}
+						break;
+				}
+				return "";
+			}
+
+			<!--
+			************************************************************************
+			***  データベースアクセス
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- テーブル情報 読込処理(ﾌｫｰﾑ表示時に使用)                         -->
+		    <!--=================================================================-->
+			private function _start_readTable_List():void{
+				var objArgs:Object = new Object();
+				this.HKC21200J.readTable_List(new Array(objArgs));
+			}
+			public function _onResult_readTable_List( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						Table_List.dataProvider = expData[1];
+						_start_readFile_List();				/**　ﾌｧｲﾙ情報の取得   */
+						break;
+					case "nodata":
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}			
+		    <!--=================================================================-->
+			<!-- ファイル情報 読込処理(ﾌｫｰﾑ表示時に使用)                         -->
+		    <!--=================================================================-->
+			private function _start_readFile_List():void{
+				var objArgs:Object = new Object();
+				this.HKC21200J.readFile_List(new Array(objArgs));
+			}
+			public function _onResult_readFile_List( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						Report_List.dataProvider = expData[1];
+						this._initForm();
+						break;
+					case "nodata":
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}			
+		    <!--=================================================================-->
+			<!-- 選択されたレポートの項目名を取得する処理 　　　　　　　         -->
+		    <!--=================================================================-->
+			private function _readReport_Column():void{
+				var objArgs:Object = new Object();
+		    	objArgs["Report_Name"] = Report_List.selectedData;
+				this.HKC21200J.readReport_Column(new Array(objArgs));
+			}
+			public function _onResult_readReport_Column( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var cmbData:Array = new Array;
+				var msg:HK_MsgBox;
+				
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						if (expData[1].length>0){
+							_aryReportCol = new Array();				/** ﾚﾎﾟｰﾄ列名        */
+							spr_Data.resetRow(0);
+							for (var numIdx:Number=0; numIdx<expData[1].length; numIdx++) {
+								var objData:Object = new Object();
+								var strWk:String = expData[1][numIdx]["Column_Name"];
+								objData["Column_Name"] = strWk;
+					    		_aryReportCol.push(objData);				/** ﾚﾎﾟｰﾄ列名の保存  */
+					    		
+				        		if (numIdx == spr_Data.rowAllCount) {
+									spr_Data.addRow(spr_Data.rowAllCount);
+								}								
+					    		spr_Data.cell(numIdx, "Report_Col").text = strWk;
+							}
+						}
+						Report_List.errorString = "";
+						Table_List.setFocus();
+						break;
+					case "nodata":
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+		    <!--=================================================================-->
+			<!-- ﾃｰﾌﾞﾙまたはﾋﾞｭｰに登録されている列名などの情報 読込処理          -->
+		    <!--=================================================================-->
+			private function _readTable_Column():void{
+				var objArgs:Object = new Object();
+		    	objArgs["Table_Name"] = Table_List.selectedData;
+				this.HKC21200J.readTable_Column(new Array(objArgs));
+			}
+			public function _onResult_readTable_Column( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var cmbData:Array = new Array;
+				var msg:HK_MsgBox;
+				
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						if (expData[1].length>0){
+							_aryTableCol = new Array();		/** ﾃｰﾌﾞﾙ列名                  */
+							cmbData = new Array();			/** ｺﾝﾎﾞﾎﾞｯｸｽ用の配列          */
+					    	cmbData.push("");				/** ｺﾝﾎﾞの最初に空白を設定する */
+							for (var numIdx:Number=0; numIdx<expData[1].length; numIdx++) {
+								var objData:Object = new Object();
+								objData["Column_Name"] = expData[1][numIdx]["Column_Name"];
+								objData["Column_Type"] = expData[1][numIdx]["Column_Type"];
+					    		_aryTableCol.push(objData);							/** ﾃｰﾌﾞﾙ列名の保存  */
+						    	cmbData.push(expData[1][numIdx]["Column_Name"]); 	/** ｺﾝﾎﾞ用に列名を保存 */
+							}
+							var colIdx:int = spr_Data.getColumnIndexByField('Table_Col');
+							HK_DataGridComboBox(spr_Data.columns[colIdx]).itemLabel = cmbData;
+							HK_DataGridComboBox(spr_Data.columns[colIdx]).itemData = cmbData;
+							
+							colIdx = spr_Jyoken.getColumnIndexByField('Column_Name');
+							HK_DataGridComboBox(spr_Jyoken.columns[colIdx]).itemLabel = cmbData;
+							HK_DataGridComboBox(spr_Jyoken.columns[colIdx]).itemData = cmbData;
+						}
+						Report_List.errorString = "";
+						break;
+					case "nodata":
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 帳票書式表 読込処理                                             -->
+		    <!--=================================================================-->
+			private function _start_readA15_RptFormat():void{
+				var objArgs:Object = new Object();
+		    	objArgs["A15_RptFormatCD"] = A15_RptFormatCD.text;
+				this.HKC21200J.readA15_RptFormat(new Array(objArgs));
+			}
+			public function _onResult_readA15_RptFormat( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var cmbData:Array = new Array;
+				var numIdx:Number = 0;
+				var numIdx1:Number = 0;
+				var strWk:String = "";
+				var msg:HK_MsgBox;
+				var objData:Object = new Object();
+				
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						A15_RptFormatNM.text = expData[1][0]["A15_RptFormatNM"];
+						Table_List.selectedData = expData[1][0]["A15_TableNM"];
+						Report_List.selectedData = expData[1][0]["A15_iReportNM"];
+						
+						this._strUpdateDate = expData[1][0]["UpdateDate"];
+						
+						spr_Data.resetRow(10);
+						spr_Jyoken.resetRow(5);
+						/** +-------------------------------------+ ﾃｰﾌﾞﾙ列名の取得処理                */
+						_aryTableCol = new Array();						/** ﾃｰﾌﾞﾙ列名                  */
+						cmbData = new Array();							/** ｺﾝﾎﾞﾎﾞｯｸｽ用の配列          */
+				    	cmbData.push("");								/** ｺﾝﾎﾞの最初に空白を設定する */
+						for (numIdx=0; numIdx<expData[2].length; numIdx++) {
+							objData = new Object();
+							objData["Column_Name"] = expData[2][numIdx]["Column_Name"];
+							objData["Column_Type"] = expData[2][numIdx]["Column_Type"];
+				    		_aryTableCol.push(objData);							/** ﾃｰﾌﾞﾙ列名の保存    */
+					    	cmbData.push(expData[2][numIdx]["Column_Name"]); 	/** ｺﾝﾎﾞ用に列名を保存 */
+						}
+						var colIdx:int = spr_Data.getColumnIndexByField('Table_Col');
+						HK_DataGridComboBox(spr_Data.columns[colIdx]).itemLabel = cmbData;
+						HK_DataGridComboBox(spr_Data.columns[colIdx]).itemData = cmbData;
+						
+						colIdx = spr_Jyoken.getColumnIndexByField('Column_Name');
+						HK_DataGridComboBox(spr_Jyoken.columns[colIdx]).itemLabel = cmbData;
+						HK_DataGridComboBox(spr_Jyoken.columns[colIdx]).itemData = cmbData;
+						/** +-------------------------------------+ ﾚﾎﾟｰﾄ項目とﾃｰﾌﾞﾙ項目の表示設定     */
+						numIdx1 = 0;
+						_aryReportCol = new Array();							/** ﾚﾎﾟｰﾄ列名          */
+						for (numIdx=0; numIdx < expData[1].length; numIdx++) {
+							switch(expData[1][numIdx]["A15_DataKB"]){
+								case "2":
+					        		if (numIdx1 == spr_Data.rowAllCount) {
+										spr_Data.addRow(spr_Data.rowAllCount);
+									}
+									strWk = expData[1][numIdx]["A15_RptColNM"];
+									objData = new Object();
+									objData["Column_Name"] = strWk;
+						    		_aryReportCol.push(objData);					/** ﾚﾎﾟｰﾄ列名の保存    */
+						    		spr_Data.cell(numIdx1, "Report_Col").text = strWk;
+									
+							    	var strCol1:String = expData[1][numIdx]["A15_ColNM"];
+									var strCol2:String = "";
+									var strType:String = "";
+									for (var numIdx9:Number=0; numIdx9<_aryTableCol.length; numIdx9++) {
+										//strWk = _aryTableCol[numIdx]["Column_Name"];
+										strCol2 = _aryTableCol[numIdx9]["Column_Name"];
+										if (strCol1 == strCol2){
+											strType = _aryTableCol[numIdx9]["Column_Type"];
+											break;
+										}
+									}
+							    	spr_Data.cell(numIdx1, 'Table_Col').selectedData = strCol1;
+							    	spr_Data.cell(numIdx1, 'Table_Col').text = strCol1;
+							    	spr_Data.cell(numIdx1, 'Column_Type').text = strType;
+
+							    	if (expData[1][numIdx]["A15_Sort"] == "1"){
+								    	spr_Data.cell(numIdx1, 'Sort').selected = true;
+								    	spr_Data.cell(numIdx1, 'Junjo').text = expData[1][numIdx]["A15_Junjo"];
+								    	spr_Data.cell(numIdx1, 'Syurui').selectedData = expData[1][numIdx]["A15_Syurui"];
+							    	}
+							    	numIdx1++;
+									break;
+							}
+						}
+						/** +-------------------------------------+ 条件ｼｰﾄの表示　　　                */
+						numIdx1 = 0;
+						for (numIdx=0; numIdx < expData[1].length; numIdx++) {
+							if(expData[1][numIdx]["A15_DataKB"] == "3"){
+				        		if (numIdx1 == spr_Jyoken.rowAllCount) {
+									spr_Jyoken.addRow(spr_Jyoken.rowAllCount);
+								}
+								if (numIdx1 > 0){
+									strWk = expData[1][numIdx]["A15_Enzanshi"];
+							    	spr_Jyoken.cell(numIdx1, 'Enzanshi').selectedData = strWk;
+							    	if (strWk == "0"){
+							    		spr_Jyoken.cell(numIdx1, 'Enzanshi').text = "AND";
+							    	}else{
+							    		spr_Jyoken.cell(numIdx1, 'Enzanshi').text = "OR";
+							    	}
+								}
+								strWk =expData[1][numIdx]["A15_ColNM"];
+						    	spr_Jyoken.cell(numIdx1, 'Column_Name').selectedData = strWk;
+						    	spr_Jyoken.cell(numIdx1, 'Column_Name').text = strWk;
+						    	
+						    	spr_Jyoken.cell(numIdx1, 'Shiki').selectedData = expData[1][numIdx]["A15_Shiki"];
+						    	spr_Jyoken.cell(numIdx1, 'Atai1').text = expData[1][numIdx]["A15_Atai1"];
+						    	spr_Jyoken.cell(numIdx1, 'Atai2').text = expData[1][numIdx]["A15_Atai2"];
+						    	numIdx1++;
+							}
+						}
+						this.readState = ReadState.ReadAfterExist;
+						this.setAllEnabled();
+						A15_RptFormatNM.setFocus();
+						break;
+					case "nodata":
+						if (Report_List.selectedData == ""){
+							Report_List.errorString = "レポート名を選択して下さい｡";
+							Report_List.setFocus();
+							return;
+						}
+						if (Table_List.selectedData == ""){
+							Table_List.errorString = "テーブル/ビュー名を選択して下さい｡";
+							Table_List.setFocus();
+							return;
+						}
+						this.readState = ReadState.ReadAfterNew;
+						this.setAllEnabled();
+						btnDelete.enabled = false;
+						A15_RptFormatNM.setFocus();
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+
+		    <!--=================================================================-->
+			<!-- 帳票書式表への書き込み処理                                      -->	
+		    <!--=================================================================-->
+			private function _start_storeA15_RptFormat():void{
+		    	var aryData:Array = new Array();
+				var objData:Object;
+				var numIdx:Number;
+				var strColData:String = "";
+				
+				/** +-----------------------------------------------------+ 印刷項目の保存      */
+				for (numIdx=0; numIdx < spr_Data.rowAllCount; numIdx++) {
+			    	strColData = spr_Data.cell(numIdx, 'Table_Col').text;
+					if (strColData == null){ strColData = ""; }
+			    	
+			    	if (strColData != ""){
+						objData = new Object();
+						
+				    	objData["A15_RptFormatCD"] = this.A15_RptFormatCD.text;
+				    	objData["A15_RptFormatNM"] = this.A15_RptFormatNM.text;
+				    	objData["A15_TableNM"] = this.Table_List.selectedData;
+				    	objData["A15_iReportNM"] = this.Report_List.selectedLabel;
+				    	objData["ReadState"] = this.readState;
+	
+				    	objData["A15_DataKB"] = "2";
+				    	objData["A15_Seq"] = numIdx+1;
+				    	
+				    	var strCol:String = spr_Data.cell(numIdx, 'Table_Col').text;
+						var strWk:String = "";
+						var strType:String = "";
+						for (var numIdx2:Number=0; numIdx2<_aryTableCol.length; numIdx2++) {
+							strWk = _aryTableCol[numIdx2]["Column_Name"];
+							if (strWk == strCol){
+								strType = _aryTableCol[numIdx2]["Column_Type"];
+								break;
+							}
+						}
+			        	objData["A15_ColNM"] = strCol;
+			        	objData["A15_ColType"] = strType;
+				    	
+			        	if(spr_Data.cell(numIdx,'Sort').selected){
+				        	objData["A15_Sort"] = "1";
+			        	} else {
+				        	objData["A15_Sort"] = "0";
+			        	}
+			        	objData["A15_Junjo"] = HK_Data.parseNum(spr_Data.cell(numIdx,'Junjo').text).toString();
+			        	objData["A15_Syurui"] = HK_Data.parseNum(spr_Data.cell(numIdx,'Syurui').selectedData).toString();
+				    	objData["User"] = this.userID;
+				    	objData["Term"] = this.termID;
+				    	objData["UpdateDate"] = this._strUpdateDate;
+			        	objData["A15_RptColNM"] = spr_Data.cell(numIdx,'Report_Col').text;
+			    		aryData.push(objData);
+			    	}
+				}
+				/** +-----------------------------------------------------+ 条件項目の保存      */
+				for (numIdx=0; numIdx < spr_Jyoken.rowAllCount; numIdx++) {
+					strColData = spr_Jyoken.cell(numIdx,'Column_Name').selectedData;
+					if (strColData == null){ strColData = ""; }
+					
+					if (strColData != ""){
+						objData = new Object();
+	
+				    	objData["A15_RptFormatCD"] = this.A15_RptFormatCD.text;
+				    	objData["A15_RptFormatNM"] = this.A15_RptFormatNM.text;
+				    	objData["A15_TableNM"] = this.Table_List.selectedData;
+				    	objData["A15_iReportNM"] = this.Report_List.selectedLabel;
+				    	objData["ReadState"] = this.readState;
+	
+				    	objData["A15_DataKB"] = "3";
+				    	objData["A15_Seq"] = numIdx+1;
+			        	objData["A15_Enzanshi"] = HK_Data.parseNum(spr_Jyoken.cell(numIdx,'Enzanshi').selectedData).toString();
+			        	objData["A15_ColNM"] = spr_Jyoken.cell(numIdx,'Column_Name').selectedData;
+			        	objData["A15_Shiki"] = HK_Data.parseNum(spr_Jyoken.cell(numIdx,'Shiki').selectedData).toString();
+			        	objData["A15_Atai1"] = spr_Jyoken.cell(numIdx,'Atai1').text;
+			        	objData["A15_Atai2"] = spr_Jyoken.cell(numIdx,'Atai2').text;
+				    	objData["User"] = this.userID;
+				    	objData["Term"] = this.termID;
+				    	objData["UpdateDate"] = this._strUpdateDate;
+			    		aryData.push(objData);
+					}
+				}
+				if (aryData.length > 0){
+					this.HKC21200J.storeA15_RptFormat(aryData);
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 帳票書式表への書き込み処理                    終了処理          -->
+		    <!--=================================================================-->
+			public function _onResult_storeA15_RptFormat( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+				
+				switch(expData[0][0]["status"]){
+					case "ok":
+						this._initForm();
+						break;
+					case "ng":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "排他制御エラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 帳票書式表の削除処理                                            -->
+		    <!--=================================================================-->
+			private function _start_deleteA15_RptFormat():void{
+				var objData:Object = new Object();
+				objData["A15_RptFormatCD"] = this.A15_RptFormatCD.text;
+				objData["A15_RptFormatNM"] = this.A15_RptFormatNM.text;
+   				objData["User"] = this.userID;
+	    		objData["Term"] = this.termID;
+    			objData["UpdateDate"] = this._strUpdateDate;
+				this.HKC21200J.deleteA15_RptFormat(new Array(objData));
+			}
+			public function _onResult_deleteA15_RptFormat( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+				
+				switch(expData[0][0]["status"]){
+					case "ok":
+						this._initForm();
+						break;
+					case "ng":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "排他制御エラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this, "ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+
+			<!--
+			************************************************************************
+			***  印刷/Excel保存の場合の処理群
+			************************************************************************
+			-->
+		    <!--=================================================================-->
+			<!-- 条件節ｎ指定されている値の特殊文字を編集する処理                -->
+		    <!--=================================================================-->
+			private function _start_Atai_Edit():void{
+		    	var aryData:Array = new Array();
+				var objData:Object;
+				var numIdx:Number;
+				var strColData:String = "";
+
+				for (numIdx=0; numIdx < spr_Jyoken.rowAllCount; numIdx++) {
+					strColData = spr_Jyoken.cell(numIdx, 'Column_Name').selectedData;
+					if (strColData == null){ strColData = ""; }
+					
+					if (strColData != ""){
+						objData = new Object();
+			        	objData["Atai1"] = spr_Jyoken.cell(numIdx,'Atai1').text;
+			        	objData["Atai2"] = spr_Jyoken.cell(numIdx,'Atai2').text;
+			    		aryData.push(objData);
+					}
+				}
+				if (aryData.length > 0){
+					this.HKC21200J.Atai_Edit(aryData);		/** 特殊文字の編集を呼出    */
+				} else {
+			        this._create_SQL_String();				/** 条件が無いのでSQL作成へ */
+					this._create_csvFile();					/** 印刷Excel保存の開始     */
+				}
+			}
+			public function _onResult_Atai_Edit( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+				var strCD1:String = "";
+				var strCD2:String = "";
+				var strColData:String = "";
+				
+				_aryJyokenAtai = new Array();				/** 条件節の値の格納用     */
+				var objData:Object;
+				switch(expData[0][0]["status"]){
+					case "ok":
+						var wCnt:Number = 0;
+						for (var numIdx:Number=0; numIdx < spr_Jyoken.rowAllCount; numIdx++) {
+							strColData = spr_Jyoken.cell(numIdx, 'Column_Name').selectedData;
+							if (strColData == null){ strColData = ""; }
+							
+							if (strColData != ""){
+								wCnt += 1;
+						    	strCD1 = expData[1][wCnt-1]["Atai1_Edit"];
+						    	strCD2 = expData[1][wCnt-1]["Atai2_Edit"];
+								objData = new Object();
+					        	objData["Atai1"] = strCD1;
+					        	objData["Atai2"] = strCD2;
+					    		_aryJyokenAtai.push(objData);	/** 条件節の値の格納    */
+					  		}
+						}
+				        this._create_SQL_String();			/** SQL文作成へ             */
+						this._create_csvFile();				/** 印刷Excel保存の開始     */
+						break;
+					case "ng":
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this,"ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 印刷/Excel保存用のcsvﾌｧｲﾙの作成                                 -->
+		    <!--=================================================================-->
+			private function _create_csvFile():void{
+				var objArgs:Object = new Object();
+		    	var aryData:Array = new Array();
+				var objData:Object;
+				var numIdx:Number = 0;
+
+				objArgs["A15_RptFormatCD"] = this.A15_RptFormatCD.text;
+				objArgs["A15_RptFormatNM"] = this.A15_RptFormatNM.text;
+       			objArgs["aryReportCol"] = _aryReportCol;
+       			objArgs["aryTableCol"] = _aryTableCol;
+				objArgs["SQL"] = _strPrintExcel_SQL;
+				if (_numSyoriFlg == 0){
+					objArgs["Operation"] = "print";
+				}else{
+					objArgs["Operation"] = "excel";
+				}
+   				objArgs["User"] = this.userID;
+	    		objArgs["Term"] = this.termID;
+				/** +-----------------------------------+ 選択されたﾃｰﾌﾞﾙ/ﾋﾞｭｰ列名 */
+				for (numIdx=0; numIdx < spr_Data.rowAllCount; numIdx++) {
+					objData = new Object();
+		        	objData["SelectCol"] = spr_Data.cell(numIdx,'Table_Col').text;
+		    		aryData.push(objData);
+				}
+       			objArgs["arySelectCol"] = aryData;
+
+		    	this.HKC21200J.create_csvFile(new Array(objArgs));
+			}
+			public function _onResult_create_csvFile( event:ResultEvent ):void{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+				
+				switch(expData[0][0]["status"]){
+					case "ok":
+						_strCsvFL = expData[1][0]["csvFileName"];
+						_strSheetFL = expData[1][0]["SheetName"];
+						_PrintExcel_Start();
+						break;
+					case "nodata":
+						msg = new HK_MsgBox(StyleMode.MsgWarning, this, "確認", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.open();
+						break;
+					case "error":
+						this.closingMessage = false;
+						msg = new HK_MsgBox(StyleMode.MsgError, this,"ＤＢエラー", MsgButton.Ok);
+						msg.message = expData[0][0]["info"];
+						msg.cmdOk = this._clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+		    <!--=================================================================-->
+			<!-- 印刷/Excel保存処理の呼出　　　                                  -->
+		    <!--=================================================================-->
+			private function _PrintExcel_Start():void{
+				var expReport:HK_Report = new HK_Report(this);
+				
+				var strReportName:String = "";
+				strReportName = Report_List.selectedData;
+				
+	            expReport.logicClass = "hkc.HKC21200";
+	            expReport.clearCondition();
+				expReport.addCondition('A15_RptFormatCD', A15_RptFormatCD.text);
+				expReport.addCondition('A15_RptFormatNM', A15_RptFormatNM.text);
+				expReport.addCondition('User', this.userID);
+				expReport.addCondition('Term', this.termID);
+				expReport.addCondition('csvFileName', _strCsvFL);
+				expReport.addCondition('SheetName', _strSheetFL);
+				expReport.addCondition('ReportName', strReportName);
+
+				if (_numSyoriFlg == 0){
+			 		if (PreviewKB.selected == true) {
+				    	expReport.printView();
+			        } else {
+				    	expReport.toPrinter();
+			        }
+				} else {
+					expReport.toExcel();
+				}
+			}
+			
+		    <!--=================================================================-->
+			<!-- 条件節とORDER BY句のSELECT文の作成処理                          -->
+		    <!--=================================================================-->
+			private function _create_SQL_String():void{
+				var wSQL:String;
+				var i:Number;
+				var w:String;
+				var strCol:String = "";
+				var strAtai1:String = "";
+				var strAtai2:String = "";
+				var strShiki:String = "";
+				var wValue1:String;
+				var wValue2:String;
+				var Col_List:String;
+				var strColData:String = "";
+				
+				wSQL = "FROM " + Table_List.selectedData;
+				/** +----------------------------------------------+ Where節の生成        */
+				w = "";
+				for(i = 0; i < spr_Jyoken.rowAllCount; i++){
+					strColData = spr_Jyoken.cell(i, 'Column_Name').selectedData;
+					if (strColData == null){ strColData = ""; }
+					
+					if (strColData != ""){
+						if (w == ""){
+							w = " WHERE "
+						} else {
+							w = w + spr_Jyoken.cell(i, 'Enzanshi').text + " ";
+						}
+						w = w + spr_Jyoken.cell(i,'Column_Name').selectedData;
+						
+						strAtai1 = _aryJyokenAtai[i]["Atai1"];
+						strAtai2 = _aryJyokenAtai[i]["Atai2"];
+						strShiki = spr_Jyoken.cell(i, 'Shiki').selectedData;
+						
+						/**  条件と項目のﾀｲﾌﾟによる条件値の編集を行う｡              */
+						wValue1 = _Jyoken_Data_Set(strCol, strAtai1, strShiki);
+						wValue2 = _Jyoken_Data_Set(strCol, strAtai2, strShiki);
+						
+						switch(spr_Jyoken.cell(i, 'Shiki').selectedData){
+							case "0":  w = w + " = " + wValue1 + " ";  break;
+							case "1":  w = w + " <> " + wValue1 + " ";  break;
+							case "2":  w = w + " < " + wValue1 + " ";  break;
+							case "3":  w = w + " <= " + wValue1 + " ";  break;
+							case "4":  w = w + " > " + wValue1 + " ";  break;
+							case "5":  w = w + " >= " + wValue1 + " ";  break;
+							case "6":  w = w + " BETWEEN " + wValue1 + " AND " + wValue2 + " ";  break;
+							case "7":  w = w + " LIKE " + wValue1 + " ";  break;
+							case "8":  w = w + " LIKE " + wValue1 + " ";  break;
+							default:  w = w + " ";  break;
+						}
+					}
+				}
+				wSQL = wSQL + w;
+				/** +----------------------------------------------+ OrderBy節の生成        */
+				var intCnt:Number = 0;
+				var intMin:Number = 999;
+				var intMax:Number = 0;
+				var w1:String;
+				for(i = 0; i < spr_Data.rowAllCount; i++){
+					if (spr_Data.cell(i,'Sort').selected == true){
+						w = spr_Data.cell(i,'Junjo').text;
+						if (HK_Data.parseNum(w) < intMin){
+							intMin = HK_Data.parseNum(w);
+						}
+						if (HK_Data.parseNum(w) > intMax){
+							intMax = HK_Data.parseNum(w);
+						}
+						intCnt += 1;
+					}
+				}
+				if (intCnt > 0){
+					w1="";
+					for(intCnt = intMin; intCnt <= intMax; intCnt++){
+						for(i = 0; i < spr_Data.rowAllCount; i++){
+							w = spr_Data.cell(i, 'Junjo').text;
+							if (intCnt == HK_Data.parseNum(w)){
+								if (w1 == ""){
+									w1 = " ORDER BY "
+								} else {
+									w1 = w1 + ","
+								}
+								w1 = w1 + spr_Data.cell(i, 'Table_Col').text;
+								if (spr_Data.cell(i, 'Syurui').selectedData == "1"){
+									w1 = w1 + " DESC";
+								}
+								break;
+							}
+						}
+					}
+					wSQL = wSQL + w1;
+				}
+				wSQL = wSQL + ";";
+				
+				_strPrintExcel_SQL = wSQL;			/** SQL文を設定保存する｡     */
+			}
+		    <!--=================================================================-->
+			<!-- 条件節の条件値の文字列編集　　                                  -->
+		    <!--=================================================================-->
+			private function _Jyoken_Data_Set(
+						strCol:String, 
+						strAtai:String, 
+						strShiki:String
+				):String{
+				
+				var strRet:String = "";
+				var numIdx:Number = 0;
+				
+			    var strCol:String = spr_Data.cell(numIdx, 'Table_Col').text;
+				var strWk:String = "";
+				var strType:String = "";
+				for (numIdx=0; numIdx < _aryTableCol.length; numIdx++) {
+					strWk = _aryTableCol[numIdx]["Column_Name"];
+					if (strWk == strCol){
+						strType = _aryTableCol[numIdx]["Column_Type"];
+						break;
+					}
+				}
+				switch(strType){
+					case "nvarchar":
+					case "varchar":
+					case "datetime":
+					case "timestamp":
+					case "char":
+						switch(strShiki){
+							case "7":
+								strRet = "'" + strAtai + "%'";  break;
+							case "8":
+								strRet = "'%" + strAtai + "%'";  break;                    		
+							default:
+								strRet = "'" + strAtai + "'";  break;                    		
+						}
+						break;
+					case "decimal":
+					case "int":
+					case "int2":
+					case "int4":
+					case "money":
+					case "smallint":
+					case "number":
+						strRet = strAtai;  break;
+				}
+				return strRet;
+			}
+	    ]]>
+	</mx:Script>
+
+	<!--
+	************************************************************************
+	***  画面デザイン
+	************************************************************************
+	-->
+    <!--=================================================================-->
+    <!-- 入力対象　表示条件の項目定義                                    -->
+    <!--=================================================================-->
+	<mx:Canvas x="4" y="5" width="892" height="66" backgroundColor="#ddeeff" borderStyle="inset">
+		<hc:HK_Button id="btnRead" label="読込" icon2="read" functionKey="F3"
+				enableTime="readbefore" click="_clickBtnRead()" x="798" y="33" tabIndex="4" width="87"/>
+		<hc:HK_Label text="ｺｰﾄﾞ" width="45"  x="0" y="4" textAlign="right"/>
+		<hc:HK_TextInput id="A15_RptFormatCD" width="130" maxChars="15" 
+		             enableTime="readbefore" inputType="char" 
+		             inputChar="num,alpha" casing="upper"
+		             showHelp="true" x="48" y="3" tabIndex="1" text="XXXXXXXXXXXXXXX" javaClassName="HKC21200" inputMust="true"/>
+		<hc:HK_Label text="ﾚﾎﾟｰﾄ名" width="67"  x="243" y="7" textAlign="right"/>
+		<hc:HK_ComboBox id="Report_List" enableTime="readbefore" width="450" tabIndex="2"  x="319" y="4" inputMust="false" javaClassName="HKC21200"/>
+		<hc:HK_Label text="ﾃｰﾌﾞﾙ/ﾋﾞｭｰ名" width="115"  x="197" y="36" textAlign="right"/>
+		<hc:HK_ComboBox id="Table_List" enableTime="readbefore" width="450" tabIndex="3"  x="319" y="34" inputMust="false" javaClassName="HKC21200"/>
+		
+	</mx:Canvas>
+
+    <!--=================================================================-->
+    <!-- フォーム表示条件の項目定義                                      -->
+    <!--=================================================================-->
+
+	<hc:HK_DataGrid id="spr_Data" height="304" enableTime="readafter" x="7" y="109" width="894" tabIndex="6" 
+					headerHeight="25" editable="true" rowHeight="25" allowMultipleSelection="true"
+		 			dragEnabled="true" dragMoveEnabled="true" dropEnabled="true"
+					verticalGridLineColor="#C0C0C0" horizontalGridLineColor="#C0C0C0" horizontalGridLines="true"
+					verticalGridLines="true" horizontalScrollPolicy="off" verticalScrollPolicy="on">
+		<hc:columns>
+			<hc:HK_DataGridTextInput headerText="    ﾚﾎﾟｰﾄ項目" width="265" dataField="Report_Col"
+									resizable="false" sortable="false" editable="false"  textAlign="left"/>
+			<hc:HK_DataGridComboBox headerText="    ﾃｰﾌﾞﾙ/ﾋﾞｭｰ項目" width="265" dataField="Table_Col"
+									itemLabel="{new Array('項目名')}"
+									itemData="{new Array('0')}"
+									resizable="false" sortable="false" editable="true"/>
+			<hc:HK_DataGridCheckBox headerText="ｿｰﾄ" width="65" dataField="Sort" resizable="false" textAlign="center" editable="true"/>
+			<hc:HK_DataGridTextInput headerText="ｿｰﾄ順" width="65" dataField="Junjo"
+									textAlign="right" inputType="number" maxChars="3"/>
+			<hc:HK_DataGridComboBox headerText="並び" width="65" dataField="Syurui" textAlign="center"
+									itemLabel="{new Array('昇順','降順')}"
+									itemData="{new Array('0', '1')}"
+									resizable="false" sortable="false"/>
+			<hc:HK_DataGridColumn headerText="型" width="0" dataField="Column_Type"  textAlign="left" visible="false"/>
+		</hc:columns>
+	</hc:HK_DataGrid>
+
+	<hc:HK_DataGrid id="spr_Jyoken" height="127" enableTime="readafter" x="6" y="419" width="893" tabIndex="8" headerHeight="25" editable="true" rowHeight="25"
+		verticalGridLineColor="#C0C0C0" horizontalGridLineColor="#C0C0C0" horizontalGridLines="true" verticalGridLines="true" horizontalScrollPolicy="off" verticalScrollPolicy="on">
+		<hc:columns>
+			<hc:HK_DataGridComboBox headerText="演算子" width="60" dataField="Enzanshi"
+									itemLabel="{new Array('', 'AND','OR')}" textAlign="center"
+									itemData="{new Array('', '0', '1')}"
+									resizable="false" sortable="false" editable="true"/>
+			<hc:HK_DataGridComboBox headerText="条件項目" width="300" dataField="Column_Name"
+									itemLabel="{new Array('項目名')}"
+									itemData="{new Array('0')}"
+									resizable="false" sortable="false" editable="true"/>
+			<hc:HK_DataGridComboBox headerText="条件式" width="80" dataField="Shiki" textAlign="center"
+									itemLabel="{new Array('＝', '≠', '＜', '≦', '＞', '≧', '～', '始まる', '含む')}"
+									itemData="{new Array('0', '1', '2', '3', '4', '5', '6', '7', '8')}"
+									resizable="false" sortable="false" editable="true"/>
+			<hc:HK_DataGridTextInput headerText="値１" width="150" dataField="Atai1"
+									 textAlign="left" inputType="char" maxChars="40"/>
+			<hc:HK_DataGridTextInput headerText="値２" width="150" dataField="Atai2"
+									 textAlign="left" inputType="char" maxChars="40"/>
+			<hc:HK_DataGridColumn headerText="値１" width="0" dataField="Atai1_Edit"  textAlign="left" visible="false"/>
+			<hc:HK_DataGridColumn headerText="値２" width="0" dataField="Atai2_Edit"  textAlign="left" visible="false"/>
+		</hc:columns>
+	</hc:HK_DataGrid>
+	
+    <!--=================================================================-->
+    <!-- ボタンの項目定義                                                -->
+    <!--=================================================================-->
+	<hc:HK_Button id="btnEscape" label="ｸﾘｱ" focusEnabled="false" click="_clickBtnEscape()" functionKey="ESC"
+		icon2="escape" x="8" y="552" tabIndex="8" width="74"/>
+	<hc:HK_Button id="btnStore"  label="保存"  focusEnabled="false" icon2="store" click="_clickBtnStore()" functionKey="F9"
+		enableTime="readafter" x="88" y="552" tabIndex="9"/>
+	<hc:HK_Button x="264" y="552"  id="btnPrint"  label="印刷" focusEnabled="false" functionKey="F6"
+		click="_clickBtnPrint(event)" enableTime="readafter" icon2 = "print" tabIndex="10"/>
+	<hc:HK_Button x="344" y="552" id="btnExcel"  label="Excel保存" focusEnabled="false" functionKey="F7"
+		click="_clickBtnExcel()" enableTime="readafter" icon2="excel" tabIndex="11"/>
+	<hc:HK_Button id="btnEnd" label="終了" focusEnabled="false" click="_clickBtnEnd()" functionKey="F12"
+		icon2="end" x="822" y="551" tabIndex="12"/>
+
+	<hc:HK_TextInput x="475" y="552" id="InfoMsg" width="342" maxChars="30"
+		textAlign="left" enableTime="non" 
+		inputType="char" inputChar="all" inputMust="false" fontFamily="ＭＳ ゴシック" fontSize="16" color="#004080" fontWeight="bold"/>
+	<hc:HK_TextInput id="A15_RptFormatNM" width="328"  maxChars="40"
+	             enableTime="readafter" imeMode="JAPANESE_HIRAGANA"
+	             inputType="char"  inputChar="all" inputMust="false" x="78" y="77" tabIndex="5" text="ＮＮＮＮＮＮＮＮＮＮＮＮＮＮＮＮＮＮＮＮ"/>
+	<hc:HK_Label text="帳票名" width="57"  x="17" y="79" textAlign="right"/>
+	<hc:HK_Button x="169" y="552" id="btnDelete" label="削除" focusEnabled="false" functionKey="F11"
+			click="_clickBtnDelete()" enableTime="readafter" icon2="delete" tabIndex="32" authMode="write" shortCutKey="delete"/>
+	<hc:HK_CheckBox x="755" id="PreviewKB" selected="false" width="140"  label="印刷プレビュー" y="76"/>
+	           
+</hc:HK_TitleWindow>

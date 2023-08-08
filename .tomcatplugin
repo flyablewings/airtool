@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tomcatProjectProperties>
+    <rootDir>webapp/</rootDir>
+    <exportSource>false</exportSource>
+    <reloadable>false</reloadable>
+    <redirectLogger>false</redirectLogger>
+    <updateXml>true</updateXml>
+    <warLocation></warLocation>
+    <extraInfo>++++%3CResource+name%3D%22connectionstring%22%0D%0A++++++++++++++type%3D%22javax.sql.DataSource%22%0D%0A++++++++++++++driverClassName%3D%22org.postgresql.Driver%22%0D%0A++++++++++++++url%3D%22jdbc%3Apostgresql%3A%2F%2Flocalhost%3A5432%2FAIRTool%22%0D%0A++++++++++++++username%3D%22postgres%22%0D%0A++++++++++++++password%3D%22123456%22%0D%0A++++++++++++++maxIdle%3D%220%22+maxWait%3D%225000%22+maxActive%3D%22100%22+%2F%3E%0D%0A</extraInfo>
+    <webPath>/AIRTool</webPath>
+</tomcatProjectProperties>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+********************************************************************************
+================================================================================
+AIRTool
+================================================================================
+Program Number  : AIRTool00000.mxml
+Program Name    : AIRToolプログラム
+Program Date    : 2009/01/05
+Programmer      : T.Ogawa
+
+===< Update History >===========================================================
+2009/01/05:新規作成
+2009/01/30:操作権限がないプログラムは非表示とする					= T.Ogawa
+================================================================================
+********************************************************************************
+-->
+<hc:HK_TitleWindow xmlns:hc="HK_Common.HK_Control.*"
+				   xmlns:mx="http://www.adobe.com/2006/mxml"
+				   creationComplete="creationCompleteHK_TitleWindow(event)"
+				   layout="absolute" width="200" height="600" title="AIRToolﾒﾆｭｰ" isMenuPg="true" showCenter="false" 
+				   borderColor="#004080">
+	
+	<mx:Style>
+		.MyAccordionHeaderStyle {
+			font-size:14;
+			color:black;
+			text-align:center;
+			padding-top:3;
+		}
+	</mx:Style>
+	
+	<mx:Script>
+		<![CDATA[
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import mx.containers.TitleWindow;
+			import mx.events.FlexEvent;
+			import mx.core.UIComponent;
+			import mx.core.Container;
+			import mx.core.Window;
+			
+			private const _csstrMenuWidth:String = "225";
+			private var _mdm:HK_ModuleManager = new HK_ModuleManager;
+			<!--
+				**********************************************************************
+				***  メニューの起動処理
+				**********************************************************************
+				-->
+				private function popupWindow(lblSwfFileNM:Label):void {
+					//_mdm.showWindow(lblSwfFileNM.id + ".swf", this, null, null, lblSwfFileNM);
+					if ( lblSwfFileNM != null ){
+						if (lblSwfFileNM.enabled == true) {
+							_mdm.showWindow(lblSwfFileNM.id + ".swf", this, null, null, lblSwfFileNM);
+						}
+					}
+				}	      
+			
+			<!--===============================================================-->
+				<!-- フォームが表示された時の処理                                  -->
+				<!--===============================================================-->
+				private function creationCompleteHK_TitleWindow(event:FlexEvent):void {
+					//this.changeMenuVisible(this.accMenu);
+					HK_Window(this.parent).move(0, 0);
+					this.accMenu.visible=true;
+				}
+			
+			<!--===============================================================-->
+				<!-- フォームが表示された時の処理                                  -->
+				<!--===============================================================-->
+				private function _rollOver(_objLabel:Label):void{
+					if (_objLabel.enabled == true) {
+						_objLabel.setStyle("fontWeight","bold");
+					}
+				}
+				private function _rollOut(_objLabel:Label):void{
+					_objLabel.setStyle("fontWeight","normal");
+				}
+			
+			<!--===============================================================-->
+				<!-- 業務の終了                                                    -->
+				<!--===============================================================-->
+				private function _clickBtnEnd():void{
+					this.close();
+				}
+		]]>
+	</mx:Script>
+	
+	<!--
+	********************************************************************************
+	*****  フォーム定義
+	********************************************************************************
+	-->
+	<mx:Canvas id="canvas" width="196" left="0" top="0" bottom="0" borderStyle="solid" 
+			   backgroundColor="#4A8DBC" backgroundAlpha="1.0" >
+		<mx:Image x="30" y="1" autoLoad="true" id="img01"/>
+		
+		<mx:Accordion  id="accMenu" width="{this.canvas.width - 9}" height="{this.height - this.img01.height - 65}" 
+					   fontSize="14" fontFamily="ＭＳ ゴシック" textAlign="center"
+					   textSelectedColor="#0000A0" backgroundColor="#EBEBEB"
+					   backgroundAlpha="1.0" headerStyleName="MyAccordionHeaderStyle"
+					   y="{this.img01.height}" x="2"  creationPolicy="all" borderColor="#CCCCCC">
+			
+			<!-- ========================================================== -->
+			<!-- ユーテリティプログラム定義                                 -->
+			<!-- ========================================================== -->
+			<mx:VBox label="ユーテリティ" width="100%" color="#000000"  verticalGap="-3">
+				<mx:Label text=" View作成ツール"		 id="HKC31400"     click="popupWindow(HKC31400)"     textAlign="left" rollOver="_rollOver(HKC31400)"     rollOut="_rollOut(HKC31400) "/>
+			</mx:VBox>
+			
+		</mx:Accordion>
+		<hc:HK_Button x="2" y="{this.height - 60}" id="btnStore"  label=" 業 務 終 了" focusEnabled="true"
+					  click="_clickBtnEnd()" icon2="end" tabIndex="3"  width="187" height="30"
+					  color="#FCF8F8" fontFamily="ＭＳ ゴシック" fontSize="14"/>
+		<mx:Image x="35" y="{this.height - 26}" source="@Embed('hokukou.swf')" autoLoad="true" id="img02"/>
+	</mx:Canvas>
+	
+</hc:HK_TitleWindow>

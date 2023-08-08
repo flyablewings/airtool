@@ -1,0 +1,1241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ ********************************************************************************
+ ================================================================================
+                             ホクコウ共通プログラム
+ ================================================================================
+ Program Number  : HKC31400.mxml
+ Program Name    : ビュー作成ツール
+ Program Date    : 2009/04/10
+ Programmer      : linhnq
+
+ ===< Update History >===========================================================
+ 2009/04/10:Start											         = linhnq
+ ================================================================================
+ ********************************************************************************
+-->
+
+
+<hc:HK_TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				   xmlns:hc="HK_Common.HK_Control.*"
+				   xmlns:hs="HK_Common.HK_S2Flex2.*"
+				   xmlns:ns1="com.controls.*"
+				   xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+				   backgroundColor="#bfdbff"
+				   creationComplete="{this.creationCompleteHK_TitleWindow(event)}"
+				   xmlns:containers="flexlib.containers.*"
+				   showHelpButton="true"
+				   layout="absolute"
+				   width="1056"
+				   height="602"
+				   title="ビュー作成ツール"
+				   closingMessage="true"
+				   styleMode="main"
+				   label="読込"
+				   x="0"
+				   y="0" 
+				   resizable="true" 
+				   storeWindowSize="true"
+				   fontFamily="ＭＳ ゴシック"
+		 		   fontSize="14">
+
+	<hs:HK_S2Flex2Service id="HKC31400J"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<hs:HK_S2Flex2Service id="HKC31400J2"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<hs:HK_S2Flex2Service id="HKC31400J3"
+						  destination="HKC31400"
+						  owner="{this}"/>						  
+	<mx:Metadata>
+		[Style(name="dragImage", name="Class")]
+		[Event(name = "addTab", type = "com.events.AddTabEvent")]	
+	</mx:Metadata>
+	
+	<mx:Script>
+		<![CDATA[
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import HK_Common.HK_Control.HK_ControlCnst.ReadState;
+			import HK_Common.HK_Data.*;
+			import HK_Common.HK_S2Flex2.*;
+			
+			import com.assets.iconEmbed;
+			import com.containers.VBoxExt;
+			import com.controls.EntityDesign;
+			import com.controls.EntityPanel;
+			import com.controls.baseClasses.EntityControl;
+			import com.controls.relationClasses.IRelationRenderer;
+			import com.events.AddTabEvent;
+			import com.events.AddTableEvent;
+			import com.events.EntityEvent;
+			import com.events.OpenSaveDialogEvent;
+			import com.events.RemoveColumnEvent;
+			import com.events.RemoveViewEvent;
+			import com.events.SaveSuccessEvent;
+			import com.objects.data.Column;
+			import com.objects.data.Table;
+			import com.sharesingle.GlobalShare;
+			
+			import flexlib.controls.SuperTabBar;
+			import flexlib.controls.tabBarClasses.SuperTab;
+			import flexlib.events.SuperTabEvent;
+			import flexlib.events.TabReorderEvent;
+			
+			import mx.collections.*;
+			import mx.controls.*;
+			import mx.controls.dataGridClasses.*;
+			import mx.controls.treeClasses.TreeItemRenderer;
+			import mx.core.DragSource;
+			import mx.core.IFlexDisplayObject;
+			import mx.core.UIComponent;
+			import mx.events.ChildExistenceChangedEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.events.MenuEvent;
+			import mx.managers.DragManager;
+			import mx.managers.PopUpManager;
+			import mx.managers.PopUpManagerChildList;
+			import mx.modules.ModuleManager;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.StringUtil;
+			
+			private var isSave:Boolean=false;
+			private const _csnumMaxSprRow:Number=999;
+			private var _strTitle:String="";
+			private var oArrTblCol:Array=new Array();			
+			private var _arrTables:Array = new Array();
+			private var _arrRelations:Array = new Array();
+			private var _arrViews:Array = new Array();
+			private var objData2Server:Object=new Object();
+			private var _dragSource:DragSource = new DragSource();			
+			
+			private var _menuItemRefresh:NativeMenuItem = new NativeMenuItem("リフレッシュ");
+			private var _menuItemRefreshTable:NativeMenuItem = new NativeMenuItem("リフレッシュ");
+			private var _menuItemRefreshView:NativeMenuItem = new NativeMenuItem("リフレッシュ");
+			private var _menuItemAddTable:NativeMenuItem = new NativeMenuItem("追加");
+			private var _menuItemOpenView:NativeMenuItem = new NativeMenuItem("オープン");
+			private var _menuItemRemoveView:NativeMenuItem = new NativeMenuItem("削除");
+			private var args:Object;
+			
+			public var _strViewName:String="";
+			public var _arrTabs:ArrayCollection = new ArrayCollection();
+			public var mdm:HK_ModuleManager;
+						
+			[Bindable]
+			[Embed("com/controls/Image/tree_closeNode.png")]
+			public var closeIcon:Class;
+			
+			[Bindable]
+			[Embed("com/controls/Image/tree_openNode.png")]
+			public var openIcon:Class;
+			
+			[Bindable]
+			[Embed(source="com/controls/Image/table_sql.png")]
+			public var iconTable:Class;
+			
+			[Bindable]
+			[Embed(source="com/controls/Image/table_sql_view.png")]
+			public var iconView:Class;
+			
+			[Bindable]
+			[Embed(source="com/controls/Image/folder.png")]
+			public var iconFolder:Class;
+
+			public function myDispatch(event:Event):void{
+				this.title = "ビュー作成ツール: " + event["_viewName"];
+				this.refreshViewHandler(event);
+			}			
+						
+			<!--
+			************************************************************************
+			***  フォームイベント
+			************************************************************************
+			-->
+			<!--=================================================================-->
+			<!-- フォームが表示された時の処理                                    -->
+			<!--=================================================================-->
+			protected function creationCompleteHK_TitleWindow(event:FlexEvent):void
+			{
+				this._initForm();
+				_strTitle = this.title;
+				this.mdm = new HK_ModuleManager;
+				
+				var menu:NativeMenu = new NativeMenu();
+				this._menuItemRefresh.addEventListener(Event.SELECT, refreshHandler);
+				menu.addItem(this._menuItemRefresh);				
+				this.accTree.contextMenu = menu;		
+				
+				var menuTbl:NativeMenu = new NativeMenu();
+				this._menuItemAddTable.addEventListener(Event.SELECT, addTableHandler);
+				this._menuItemRefreshTable.addEventListener(Event.SELECT, refreshTableHandler);
+				menuTbl.addItem(this._menuItemAddTable);
+				menuTbl.addItem(this._menuItemRefreshTable);
+				this.tvTables.contextMenu = menuTbl;
+				menuTbl.addEventListener(Event.DISPLAYING, menuTblDisplayingHandler);		
+				
+				//Load default designer, this designer cannot be closed
+				this.addNewTabHandler(new AddTabEvent(AddTabEvent.addTab));														
+			}
+			
+			private function addNewTabHandler(event:AddTabEvent, isLoadView:Boolean=false, viewName:String="", closable:String=SuperTab.CLOSE_ROLLOVER):void{
+				cursorManager.setBusyCursor();
+				var e:EntityDesign = new EntityDesign();
+				if(isLoadView){
+					e.addEventListener(FlexEvent.CREATION_COMPLETE, entCompleteHandler);
+				}
+				else{
+					e.addEventListener(FlexEvent.CREATION_COMPLETE, entDefaultCompleteHandler);
+				}
+				e.addEventListener(AddTabEvent.addTab, newEntityAddTabHandler);
+				e.addEventListener(AddTableEvent.addTable, _clickBtnShowTable);
+				e.addEventListener(RemoveColumnEvent.remove, _clickBtnDeleteSelectedField);
+				e.addEventListener(RemoveViewEvent.removeView, refreshViewHandler);
+				e.addEventListener(SaveSuccessEvent.saveSuccess, refreshViewHandler);
+				e.addEventListener(OpenSaveDialogEvent.openDialog, openDialogHandler);
+				this.addTab(viewName, this.tabNav, e, isLoadView, closable);
+				this.tabNav.selectedIndex = this.tabNav.numChildren - 1;
+			}
+			
+			private function openDialogHandler(event:OpenSaveDialogEvent):void{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				isSave = true;
+				var objArgs:Object = e.getSQLView();	
+				objArgs["C04_CD"] = this.userID;
+				objArgs["Term"] = this.termID;
+				var isDuplicateSelectedCols:Boolean = false;	
+				//begin xungnv added
+				var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgWarning, this, "警告");
+				if(objArgs["sql"] == null || objArgs["sql"].toString() == ""){					
+					msg.message = "1個以上のテーブルからの1つ以上のコラムを選択してください。";
+					msg.open();
+					return;
+				}
+				var arrCols:Array = objArgs["columns"] as Array;
+				for(var i:int = 0; i < arrCols.length && arrCols.length > 1; i++){
+					while(i < arrCols.length - 1){
+						if(arrCols[i].toString().split('.')[1] == arrCols[i+1].toString().split('.')[1]){
+							isDuplicateSelectedCols = true;
+							break;
+						}
+						i++;
+					}
+					if(isDuplicateSelectedCols)
+						break;
+				}
+				if(isDuplicateSelectedCols){
+					msg.message = "1つ以上のコラムが選択リストに存在しました。";
+					msg.open();
+					return;
+				}
+				//end xungnv added		
+				
+				mdm.showWindow("HKC31440.swf", this, null, objArgs);
+			}
+			
+			private function _clickBtnDeleteSelectedField(event:RemoveColumnEvent):void
+			{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				e.deleteSelectedField();
+			}
+			
+			private function newEntityAddTabHandler(event:AddTabEvent):void{
+				this.addNewTabHandler(event);
+			}
+			
+			private function refreshTableHandler(event:Event):void{
+				this._start_readAllTables();
+			}
+			
+			private function menuTblDisplayingHandler(event:Event):void{
+				var items:Array = event.target["items"] as Array;
+				if(this.tvTables.selectedIndex < 0){
+					event.stopPropagation();
+					for each(var obj:NativeMenuItem in items){
+						if(obj.label != "リフレッシュ"){
+							obj.enabled = false;
+						}
+						else{
+							obj.enabled = true;
+						}
+					}
+				}
+				else{
+					for each(var obj2:NativeMenuItem in items){
+						obj2.enabled = true;
+					}
+				}
+			}
+			
+			private function refreshHandler(event:Event):void{
+				this._start_readAllTables();
+				this.getAllViews();
+			}
+			
+			public function getAllViews():void
+			{
+				var objArgs:Object=new Object();				
+				this.HKC31400J3.readViewSql(new Array(objArgs));
+			}
+
+			public function _onResult_readViewSql(event:ResultEvent):void
+			{	
+				var expData:Array = event.result as Array;
+				if(expData != null){			
+					this._arrViews=expData[1];
+				}
+				else if(expData[0][0]["status"]=="error"){
+					this.closingMessage = true;
+					var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+					msg.message = "データベースに接続できません。";
+					msg.cmdOk=_clickBtnEnd;
+					msg.open();
+					return;
+				}
+				try{
+					this.tvViews.dataProvider=this._arrViews;		
+					this.tvViews.labelField="viewname";
+					this.tvViews.data="definition";
+				}catch(e:Error){				
+				}
+				initNonClosableTab();
+			}
+			
+			private function addTableHandler(event:Event):void{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				if(e.tabView.selectedIndex == 0){
+					this.addTableToDiagram(this.tvTables.selectedItem["tablename"].toString());
+				}
+			}
+			
+			private function openViewHandler(event:Event):void{
+				this.args = new Object();
+				var item:Object = this.tvViews.selectedItem;
+				
+				this.args["viewname"] = item["viewname"].toString();
+				this.args["definition"] = item["definition"].toString();
+				
+				this.addNewTabHandler(new AddTabEvent(AddTabEvent.addTab), true, this.args["viewname"]);
+			}			
+			
+			private function entCompleteHandler(event:FlexEvent):void{
+				var e:EntityDesign = this.tabNav.getChildAt(this.tabNav.selectedIndex)["displayObject"];
+				e.allTables = this._arrTables;
+				e.allDefaultRelations = this._arrRelations;
+				cursorManager.removeBusyCursor();
+				e.loadView(this.args);
+			}
+			
+			private function entDefaultCompleteHandler(event:FlexEvent):void{
+				var e:EntityDesign = this.tabNav.getChildAt(this.tabNav.selectedIndex)["displayObject"];
+				e.allTables = this._arrTables;
+				e.allDefaultRelations = this._arrRelations;
+				cursorManager.removeBusyCursor();
+			}
+			
+			private function removeViewHandler(event:Event):void{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				var viewname:String = this.tvViews.selectedItem["viewname"].toString();
+				e.removeView(viewname);
+			}
+
+			<!--
+			************************************************************************
+			***  Private メソッド
+			************************************************************************
+			-->
+			<!--=================================================================-->
+			<!-- 初期化処理                                                      -->
+			<!--=================================================================-->
+			private function _initForm():void
+			{				
+				this._start_readAllTables();
+				this._start_readAllReltionship();
+				this.getAllViews();
+			}
+			
+			<!--
+			************************************************************************
+			***  FOR All tables and relationship on formload
+			************************************************************************
+			-->
+			<!--=================================================================-->
+			<!-- テーブル情報の読込処理                                          -->
+			<!--=================================================================-->
+			private function _start_readAllTables():void
+			{
+				var objArgs:Object = new Object();
+				this.HKC31400J.readAllTables(new Array(objArgs));
+			}
+			public function _onResult_readAllTables(event:ResultEvent):void
+			{
+				var expData:Array = event.result as Array;
+				
+				switch (expData[0][0]["status"])
+				{
+					case "existdata":
+						this._arrTables=expData[1];
+						this.tvTables.dataProvider = this._arrTables;
+						this.tvTables.labelField = "description";
+						this.tvTables.data = "tablename";
+						break;
+					case "nodata":
+						//entityDesign.allTables = new Array();
+						break;
+					case "error":
+						this.closingMessage = true;
+						var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+						msg.message = "データベースに接続できません。";
+						msg.cmdOk = _clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+
+			<!--=================================================================-->
+			<!-- ビュー情報の読込処理                                            -->
+			<!--=================================================================-->
+			private function _start_readAllReltionship():void
+			{
+				var objArgs:Object = new Object();
+				this.HKC31400J2.readTableRelationshipOfDatabase(new Array(objArgs));
+			}
+			public function _onResult_readTableRelationshipOfDatabase(event:ResultEvent):void
+			{
+				var expData:Array = event.result as Array;
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];				
+				switch (expData[0][0]["status"])
+				{
+					case "existdata":						
+						this._arrRelations=expData[1];		
+						e.allDefaultRelations=expData[1];
+						break;
+					case "nodata":
+						e.allDefaultRelations=new Array();
+						break;
+					case "error":
+						this.closingMessage = true;
+						var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+						msg.message = "データベースに接続できません。";
+						msg.cmdOk=_clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+
+			<!--=================================================================-->
+			<!-- テーブル列情報の読込処理                                        -->
+			<!--=================================================================-->
+			private function _start_readTableColumns(
+					tablenames:String
+				):void{
+				var objArgs:Object = new Object();
+				objArgs["tablename"] = tablenames;
+				this.HKC31400J.readTable_Columns(new Array(objArgs));
+			}
+			public function _onResult_readTable_Columns(
+					event:ResultEvent
+				):void{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				var expData:Array = event.result as Array;
+				var tbl:Table;
+				var col:Column;
+				var arrCol:Array = new Array();
+				var strTablename:String = "";
+				
+				switch (expData[0][0]["status"])
+				{
+					case "existdata":
+						var dic:Dictionary = new Dictionary();
+						for each (var obj:Object in expData[1]) //obj is Column
+						{
+							var isTableLoaded:Boolean = false;
+							strTablename = obj["tablename"].toString();
+							if (dic[strTablename] == undefined){
+								var tableDescription:String="";
+								var objTable:Object
+								if (this._arrTables != null && this._arrTables.length > 0){
+									for each (objTable in this._arrTables){
+										if (objTable["tablename"] == strTablename)	{
+											tableDescription = objTable["description"];											
+											break;
+										}
+									}
+								}								
+
+								tbl = new Table(strTablename, tableDescription);
+								dic[strTablename] = tbl;
+							}else{
+								tbl = dic[strTablename];
+							}
+							col = new Column(strTablename, obj["fieldname"].toString(), obj["description"].toString());
+							tbl.Columns.push(col);
+						}
+						for each (var obj2:Object in dic){
+							e.addNewEntity(obj2 as Table);
+							var t:Table = obj2 as Table;
+							GlobalShare.insertColumns(t.TableName, t.Columns);							
+						}
+						
+						//this.setAllEnabled();
+						break;
+					case "nodata":
+						//this.setAllEnabled();
+						break;
+					case "error":
+						this.closingMessage = true;
+						var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+						msg.message = "データベースに接続できません。";
+						msg.cmdOk = _clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}			
+
+			<!--
+			************************************************************************
+			***  ボタンイベント
+			************************************************************************
+			-->
+			<!--=================================================================-->
+			<!-- テーブル追加ボタンを押下した時の処理                            -->
+			<!--=================================================================-->
+			private function _clickBtnShowTable(event:AddTableEvent):void
+			{
+				var objHelpCode:Object = objHelpCode=new Object;
+				objHelpCode["Tables"] = this._arrTables;
+				mdm.showWindow("HKC31410.swf", this, null, objHelpCode);
+			}
+			<!--=================================================================-->
+			<!-- 読込ボタンを押下した時の処理                                    -->
+			<!--=================================================================-->
+			private function _clickBtnRead():void
+			{
+				if (this.checkAllData() != 0)
+				{
+					return;
+				}
+				this._start_readDataFromSql();
+			}
+			<!--=================================================================-->
+			<!-- 終了ボタンを押下した時の処理                                    -->
+			<!--=================================================================-->
+			private function _clickBtnEnd():void
+			{
+				this.close();
+			}
+			<!--=================================================================-->
+			<!-- 各コントロールのデータチェック処理(.checkAllData()でも動作)     -->
+			<!--=================================================================-->
+			override public function checkGridRemote(
+					grd:HK_DataGrid, 
+					numRowIndex:Number, 
+					strDataField:String
+				):String
+			{
+				return "";
+			}
+			<!--=================================================================-->
+			<!-- [Grid]データベースとの照合終了処理                              -->
+			<!--=================================================================-->
+			override public function checkGridRemoteData(
+					grd:HK_DataGrid, 
+					numRowIndex:Number, 
+					strDataField:String, 
+					event:ResultEvent
+				):String
+			{
+				return "";
+			}
+
+			<!--
+			************************************************************************
+			***  データベースアクセス
+			************************************************************************
+			-->
+			<!--=================================================================-->
+			<!-- Create sql and get data with script                            -->
+			<!--=================================================================-->
+			private function _start_readDataFromSql():void
+			{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				var objArgs:Object;
+				objArgs = e.getSQLView();
+				if(objArgs != null){
+					mdm.showWindow("HKC31420.swf", this, null, objArgs);
+				}
+			}
+			private function _start_ValidateSQL():void{		
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];	
+				var objArgs:Object;
+				objArgs = e.getSQLView();					
+				this.HKC31400J.readDataFromSql(new Array(objArgs));
+			}
+			
+			public function _onResult_readDataFromSql(event:ResultEvent):void{
+				var expData:Array = event.result as Array;
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						if(isSave){
+							callLater(openSaveView);
+						}
+						else{
+							callLater(updateViewInfo);
+						}
+						break;
+					case "nodata":
+						if(isSave){
+							callLater(openSaveView);
+						}
+						else{
+							callLater(updateViewInfo);
+						}
+						break;
+					case "error":
+						this.closingMessage = false;
+						var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError,this,"読込エラー", MsgButton.Ok);
+						//msg.message = expData[0][0]["info"];
+						msg.message = "SQLステートメントは無効です。 規則をチェックしてください。";
+						
+						if(isSave){
+							msg.cmdOk = _clickBtnEnd;
+						}
+						msg.open();
+						break;
+				}
+			}
+
+			<!--=================================================================-->
+			<!-- Called from hkc31410                                            -->
+			<!--=================================================================-->
+
+			// tablenames is a list of table name separated by ,
+			// return true: table not added yet
+			// return false: table added into layout already
+			public function addTableToDiagram(tablenames:String):void
+			{
+				//if (dataProvider == null || dataProvider[tablenames] == undefined)
+				//{
+					this._start_readTableColumns(tablenames);
+				//}
+			}
+			
+			public function loadView(objArg:Object):void
+			{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				this._strViewName = objArg["viewname"];
+				this.title = _strTitle + " : " + _strViewName;
+				e.resetEntityDesign();
+				e.loadView(objArg);
+			}
+			
+			public function changeViewName(objArg:Object):void
+			{
+				this._strViewName=objArg["viewname"];
+				this.title = _strTitle + " : " + _strViewName;
+				this.tabNav.selectedChild["displayObject"]["_strViewName"] = this._strViewName;
+			}
+
+			private function openSaveView():void
+			{
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				isSave = true;
+				var objArgs:Object = e.getSQLView();	
+				objArgs["C04_CD"] = this.userID;
+				objArgs["Term"] = this.termID;
+				var isDuplicateSelectedCols:Boolean = false;	
+				//begin xungnv added
+				var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgWarning, this, "警告");
+				if(objArgs["sql"] == null || objArgs["sql"].toString() == ""){					
+					msg.message = "1個以上のテーブルからの1つ以上のコラムを選択してください。";
+					msg.open();
+					return;
+				}
+				var arrCols:Array = objArgs["columns"] as Array;
+				for(var i:int = 0; i < arrCols.length && arrCols.length > 1; i++){
+					while(i < arrCols.length - 1){
+						if(arrCols[i].toString().split('.')[1] == arrCols[i+1].toString().split('.')[1]){
+							isDuplicateSelectedCols = true;
+							break;
+						}
+						i++;
+					}
+					if(isDuplicateSelectedCols)
+						break;
+				}
+				if(isDuplicateSelectedCols){
+					msg.message = "1つ以上のコラムが選択リストに存在しました。";
+					msg.open();
+					return;
+				}
+				//end xungnv added		
+				
+				mdm.showWindow("HKC31440.swf", this, null, objArgs);
+			}
+
+			private function btnViewAction_Click():void
+			{
+				if (_strViewName != "")
+				{
+					isSave = false;
+					checkExistViewNameSql();
+				}
+				else
+				{
+					isSave = true;
+					openSaveView();
+				}
+			}
+
+			<!--=================================================================-->
+			<!-- Save view information                                           -->
+			<!--=================================================================-->
+			
+			private function checkExistViewNameSql():void{
+				var obj:Object = new Object();
+				obj["viewname"] = _strViewName;
+				
+				var arr:Array = new Array();
+				arr.push(obj);
+				
+				this.HKC31400J.checkExistViewNameSql(arr);
+			}
+			
+			public function _onResult_checkExistViewNameSql(event:ResultEvent):void{
+				if (event.result == 0)
+				{
+					openSaveView();	
+				}
+				else
+				{
+					_start_ValidateSQL();
+				}
+			}
+						
+			private function updateViewInfo():void
+			{	
+				var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+				isSave = false;							
+				//var objArgs:Object=entityDesign.getViewInfo();
+				var objArgs:Object=e.getSQLView();
+				var arr:Array = new Array();
+				var obj:Object = new Object();
+				var isDuplicateSelectedCols:Boolean = false;
+				obj["viewname"] = _strViewName;
+				obj["oldviewname"] = _strViewName;
+				obj["definition"] = objArgs["sql"].toString();
+				obj["a02_viewname"] = obj["viewname"]
+				obj["a02_tables"] = objArgs["tables"].toString();
+				obj["a02_relations"] = objArgs["relations"].toString();
+				obj["a02_columns"] = objArgs["columns"].toString();
+				obj["a02_oldviewname"] = obj["a02_viewname"];
+				obj["C04_CD"] = this.userID;
+				obj["Term"] = this.termID;
+				//begin xungnv added
+				var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgWarning, this, "警告");
+				
+				if(Number(obj["viewname"])){
+					msg.message = "Viewは数を許容しません。";
+					msg.open();
+					return;
+				}
+				
+				if(obj["viewname"] == null || StringUtil.trim(obj["viewname"]) == ""){
+					msg.message = "Viewのために名前を入力してください。";
+					msg.open();
+					return;
+				}
+				
+				if(objArgs["tables"] == null || objArgs["tables"].toString() == ""){					
+					msg.message = "節約する前に、1個以上のテーブルをViewに加えてください。";
+					msg.open();
+					return;
+				}
+				if(objArgs["sql"] == null || objArgs["sql"].toString() == ""){					
+					msg.message = "1個以上のテーブルからの1つ以上のコラムを選択してください。";
+					msg.open();
+					return;
+				}
+				var arrCols:Array = objArgs["columns"] as Array;
+				for(var i:int = 0; i < arrCols.length && arrCols.length > 1; i++){
+					while(i < arrCols.length - 1){
+						if(arrCols[i].toString().split('.')[1] == arrCols[i+1].toString().split('.')[1]){
+							isDuplicateSelectedCols = true;
+							break;
+						}
+						i++;
+					}
+					if(isDuplicateSelectedCols)
+						break;
+				}
+				if(isDuplicateSelectedCols){
+					msg.message = "1つ以上のコラムが選択リストに存在しました。";
+					msg.open();
+					return;
+				}
+				//end xungnv added
+				arr.push(obj);
+				this.HKC31400J.updateViewSql(arr);
+			}
+			
+			public function _onResult_updateViewSql(event:ResultEvent):void
+			{
+				var expData:Array = event.result as Array;
+				var msg:HK_MsgBox;
+				if (event.result >= 0)
+				{
+					this.closingMessage = false;
+					msg = new HK_MsgBox(StyleMode.MsgWarning, this, "完了確認", MsgButton.Ok);
+					msg.message = "ビューの保存が完了しました｡";
+					msg.open();					
+				}
+				else
+				{
+					this.closingMessage=false;
+					msg = new HK_MsgBox(StyleMode.MsgError, this, "保存エラー", MsgButton.Ok);
+					msg.message = "ビューの内容またはビュー名を確認し、再度、保存下さい。"
+					msg.cmdOk = _clickBtnEnd;					
+					msg.open();
+				}
+			}
+			
+			private function _dividerRelease_Click():void
+			{
+				if (this.navigationImage1.visible == true)
+				{
+					this.navigationImage1.visible=false;
+					this.navigationImage.visible=true;
+					this.lblTitleLeft.visible=true;
+				}
+				this.tvTables.visible=true;
+			}
+			
+			public function toggleLeftPanel():void
+			{
+				if (this.leftPanel.width == 25)
+				{
+					this.expandleftPanelEffect.widthTo=this.width * 0.2;
+					this.expandleftPanelEffect.end();
+					this.expandleftPanelEffect.play();
+					this.lblTitleLeft.visible=true;
+					this.navigationImage.source="com/controls/Image/CollLeft.png";
+					this.navigationImage.toolTip="隠す";
+					this.navigationImage1.visible=false;
+					this.tvTables.visible=true;
+				}
+				else
+				{
+					this.contractleftPanelEffect.widthTo=25;
+					this.contractleftPanelEffect.end();
+					this.contractleftPanelEffect.play();
+					this.lblTitleLeft.visible=false;
+					this.navigationImage1.source="com/controls/Image/CollRight.png";
+					this.navigationImage1.toolTip="地図";
+					this.navigationImage1.visible=true;
+					this.tvTables.visible=false;
+				}
+			}
+			
+			private function viewCreationComplete():void{
+				this.tvViews.dataProvider=this._arrViews;		
+				this.tvViews.labelField="viewname";
+				this.tvViews.data="definition";
+				
+				var menu:NativeMenu = new NativeMenu();
+				this._menuItemOpenView.addEventListener(Event.SELECT, openViewHandler);
+				menu.addItem(this._menuItemOpenView);
+				this._menuItemRemoveView.addEventListener(Event.SELECT, removeViewHandler);
+				menu.addItem(this._menuItemRemoveView);
+				this._menuItemRefreshView.addEventListener(Event.SELECT, refreshViewHandler);
+				menu.addItem(this._menuItemRefreshView);				
+				this.tvViews.contextMenu = menu;
+				menu.addEventListener(Event.DISPLAYING, menuDisplayingHandler);			
+			}
+			
+			private function refreshViewHandler(event:Event):void{
+				if(event.type == RemoveViewEvent.removeView){
+					if(this.tabNav.numChildren > 1){
+						this.tabNav.removeChildAt(this.tabNav.selectedIndex);
+					}
+				}
+				else if(event.type == SaveSuccessEvent.saveSuccess){
+					(this.tabNav.selectedChild as VBoxExt).label = event["_viewName"];
+					this.tabNav.selectedChild["displayObject"]["btnRemove"]["enabled"] = true;
+				}
+				this.getAllViews();
+				this.tabNav.selectedIndex = this.tabNav.numChildren - 1;
+			}
+			
+			private function menuDisplayingHandler(event:Event):void{
+				var items:Array = event.target["items"] as Array;
+				if(this.tvViews.selectedIndex < 0){
+					event.stopPropagation();					
+					for each(var obj:NativeMenuItem in items){
+						if(obj.label != "リフレッシュ"){
+							obj.enabled = false;
+						}
+						else{
+							obj.enabled = true;
+						}
+					}
+				}
+				else{
+					
+					for each(var obj2:NativeMenuItem in items){
+						obj2.enabled = true;
+					}
+				}
+			}
+			
+			private function tvTablesMouseDown(event:MouseEvent):void{
+				try
+				{
+					var itemRenderer:TreeItemRenderer=event.target["owner"];
+					var source:DragSource=new DragSource();
+					source.addData(itemRenderer.data, "tableFormat");
+					this._dragSource=null;
+					this._dragSource=source;
+					var dragImageType:Object=this.getStyle("dragImage");
+					var image:IFlexDisplayObject=new dragImageType();
+					DragManager.doDrag(this.tvTables, source, event, image, 0, 0, 1);
+				}
+				catch (err:Error){
+				}
+			}
+			
+			private function tvViewsMouseDown(event:MouseEvent):void{
+				try
+				{
+					var itemRenderer:TreeItemRenderer=event.target["owner"];
+					var source:DragSource=new DragSource();
+					source.addData(itemRenderer.data, "viewFormat");
+					this._dragSource=null;
+					this._dragSource=source;
+					var dragImageType:Object=this.getStyle("dragImage");
+					var image:IFlexDisplayObject=new  dragImageType();
+					DragManager.doDrag(this.tvViews, source, event, image, 0, 0, 1);
+				}
+				catch (error:Error){					
+				}
+			}
+			
+			private function dragEnterHandler(event:DragEvent):void
+			{
+				try
+				{
+					var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+					if((this._dragSource.hasFormat("tableFormat") && e.tabView.selectedIndex == 0) || this._dragSource.hasFormat("viewFormat")){
+						var o:Tree=event.dragInitiator as Tree;					
+						DragManager.acceptDragDrop(o);
+						e.dropTarget = o;
+					}	
+				}
+				catch (error:Error){				
+				}
+			}
+			
+			private function dragDropHandler(event:DragEvent):void
+			{
+				try
+				{
+					var e:EntityDesign = this.tabNav.selectedChild["displayObject"];
+					if(e.dropTarget != null){
+						if (this._dragSource.hasFormat("tableFormat"))
+						{
+							var tablename:String = this._dragSource.dataForFormat("tableFormat")["tablename"].toString();
+							this.addTableToDiagram(tablename);
+						}
+						else
+						{
+							var viewname:String = this._dragSource.dataForFormat("viewFormat")["viewname"].toString();
+							var definition:String = this._dragSource.dataForFormat("viewFormat")["definition"].toString();
+							args = new Object();
+							args["viewname"] = viewname;
+							args["definition"] = definition;
+							
+							this.addNewTabHandler(new AddTabEvent(AddTabEvent.addTab), true, viewname);
+						}					
+						e.dropTarget = null;	
+					}	
+				}
+				catch (error:Error){					
+				}				
+			}
+			
+			private function tvTablesDoubleClick(event:MouseEvent):void{			
+				var e:EntityDesign = this.tabNav.getChildAt(this.tabNav.selectedIndex)["displayObject"];	
+				if(this.tvTables.selectedItem != null && e.tabView.selectedIndex == 0){
+					this.addTableToDiagram(this.tvTables.selectedItem["tablename"].toString());
+				}
+			}
+			
+			private function tvViewsDoubleClick(event:MouseEvent):void{
+				if(this.tvViews.selectedItem != null){
+					var item:Object = this.tvViews.selectedItem;
+					args = new Object();					
+					args["viewname"] = item["viewname"].toString();
+					args["definition"] = item["definition"].toString();
+					
+					this.addNewTabHandler(new AddTabEvent(AddTabEvent.addTab), true, this.args["viewname"]);
+				}
+			}		
+			
+			private function initNonClosableTab():void {
+				this.tabNav.setClosePolicyForTab(0, SuperTab.CLOSE_NEVER);
+			}
+						
+			private function addTab(lbl:String, navigator:SuperTabNavigator, module:DisplayObject=null, isLoadView:Boolean=false, closePolicy:String=SuperTab.CLOSE_ROLLOVER, icon:Class=null):void {
+				try{
+					var child:VBoxExt = new VBoxExt();				
+					var title:String = "";
+					if(lbl=="" || lbl==null) lbl = "無題_1";
+					
+					if(!isLoadView){						
+						title = this.getTitleForNewDesigner(lbl, this._arrTabs);								
+						child.label = title;
+						this._arrTabs.addItem(title);
+						child.icon = icon;
+										
+						child.addChild(module);				
+						navigator.addChild(child);
+						child.displayObject = module;
+					}
+					else{
+						title = lbl;
+						var childs:Array = this.tabNav.getChildren();
+						var alreadyLoaded:Boolean = false;
+						var index:int=0;
+						
+						for each(var o:VBoxExt in childs){
+							if(o.label == title){
+								alreadyLoaded = true;
+								break;
+							}
+							index++;
+						}
+						if(!alreadyLoaded){										
+							child.label = title;
+							child.icon = icon;
+							child.addChild(module);				
+							navigator.addChild(child);
+							child.displayObject = module;
+						}
+						else{
+							this.tabNav.selectedIndex=index;
+						}
+					}					
+				}catch(err:Error){
+				}
+				cursorManager.removeBusyCursor();
+			}
+			
+			private function getTitleForNewDesigner(title:String, arrTitle:ArrayCollection, idx:int = 1):String{				
+				var isDup:Boolean = false;
+				var newTitle:String = "";
+				
+				for each(var s:String in arrTitle){					
+					if(s == title){
+						newTitle = title.split('_')[0] + "_" + idx;
+						isDup = true;
+						idx++;
+						break;
+					}					
+				}
+				
+				if(isDup){
+					return getTitleForNewDesigner(newTitle, arrTitle, idx);
+				}
+				
+				return title;
+			}
+			
+			private function changeTabHandler():void{				
+				EntityControl._titleWindow = this.tabNav.selectedChild["displayObject"]["entityView"];
+				this.title = "ビュー作成ツール: " + this.tabNav.selectedChild.label;								
+			}
+			
+			private function tabRemoveHandler(event:SuperTabEvent):void{
+				var index:int = 0;
+				for each(var item:String in this._arrTabs){
+					if(item == event.tabTitle){
+						this._arrTabs.removeItemAt(index);
+						break;
+					}
+					index++;
+				}
+			}
+		]]>
+	</mx:Script>
+	<!--
+	************************************************************************
+	***  画面デザイン
+	************************************************************************
+	-->
+	<mx:WipeRight id="wipeIn"
+				  duration="1000"/>
+
+	<mx:Resize id="expandleftPanelEffect"
+			   target="{leftPanel}"
+			   duration="500"/>
+	<mx:Resize id="contractleftPanelEffect"
+			   target="{leftPanel}"
+			   duration="500"/>
+
+	<mx:VBox id="mainContainer"
+			 width="100%"
+			 height="100%"
+			 paddingTop="2"
+			 paddingLeft="2"
+			 paddingRight="2"
+			 paddingBottom="2">
+		<mx:HDividedBox id="hboxDivider"
+						horizontalGap="3"
+						minWidth="32"
+						width="100%"
+						dividerRelease="{this._dividerRelease_Click()}"
+						height="100%">
+			<mx:HBox id="leftPanel"
+					 width="220"
+					 height="100%"
+					 borderStyle="solid"
+					 borderColor="#6593cf"
+					 verticalScrollPolicy="off"
+					 horizontalScrollPolicy="off">
+				<mx:VBox verticalGap="2"
+						 height="100%"
+						 width="100%"
+						 horizontalScrollPolicy="off"
+						 verticalScrollPolicy="off">
+					<mx:HBox horizontalGap="2"
+							 verticalAlign="middle"
+							 width="100%"
+							 height="30">
+						<mx:HBox paddingLeft="4">
+							<mx:Image id="navigationImage1"
+									  visible="false"
+									  width="16"
+									  height="16"
+									  click="{toggleLeftPanel()};"
+									  toolTip="隠す"
+									  showEffect="{wipeIn}"
+									  hideEffect="Fade"/>
+						</mx:HBox>
+						<mx:Label id="lblTitleLeft"
+								  text="テーブル  - ビュー"
+								  textAlign="center"
+								  fontWeight="bold"
+								  fontSize="12"
+								  color="#3e418b" width="163"/>
+						<mx:HBox width="100%"
+								 horizontalAlign="right"
+								 paddingRight="8">
+							<mx:Image width="16"
+									  id="navigationImage"
+									  click="toggleLeftPanel();"
+									  toolTip="隠す"
+									  source="com/controls/Image/CollLeft.png"/>
+						</mx:HBox>
+					</mx:HBox>
+					<mx:VBox id="vbxTree"
+							 width="100%"
+							 height="100%"
+							 backgroundColor="#ffffff"
+							 horizontalScrollPolicy="off"
+							 verticalScrollPolicy="off">
+						<!--Input Accordion-->
+
+						<mx:Accordion id="accTree"
+									  width="100%"
+									  height="100%">
+							<mx:VBox label="テーブル"
+									 id="accTables"
+									 width="100%"
+									 height="100%"
+									 horizontalAlign="left"
+									 paddingLeft="20"
+									 toolTip="テーブル"
+									 icon="@Embed(source='com/controls/Image/table_sql.png')">
+								<mx:Tree id="tvTables"
+										 width="100%"
+										 height="100%"
+										 iconField="@icon"
+										 labelField="@label"
+										 dragEnabled="true"
+										 borderStyle="none"
+										 dragMoveEnabled="true"
+										 disclosureClosedIcon="{this.openIcon}"
+										 disclosureOpenIcon="{this.closeIcon}"
+										 folderClosedIcon="{this.iconTable}"
+										 folderOpenIcon="{this.iconTable}"
+										 creationCompleteEffect="Iris"
+										 doubleClickEnabled="true"
+										 mouseDown="{this.tvTablesMouseDown(event)}"
+										 doubleClick="{this.tvTablesDoubleClick(event)}">
+								</mx:Tree>
+							</mx:VBox>
+							<mx:VBox label="ビュー"
+									 id="accViews"
+									 width="100%"
+									 height="100%"
+									 horizontalAlign="left"
+									 paddingLeft="20"
+									 toolTip="ビュー"
+									 icon="@Embed(source='com/controls/Image/table_sql_view.png')">
+								<mx:VBox id="vbView"
+										 width="100%"
+										 height="100%">
+									<mx:Tree id="tvViews"
+											 width="100%"
+											 height="100%"
+											 iconField="@icon"
+											 labelField="@label"
+											 borderStyle="none"
+											 dragEnabled="true"
+											 dragMoveEnabled="true"
+											 disclosureClosedIcon="{this.openIcon}"
+											 disclosureOpenIcon="{this.closeIcon}"
+											 folderClosedIcon="{this.iconView}"
+											 folderOpenIcon="{this.iconView}"
+											 creationCompleteEffect="Iris"
+											 doubleClickEnabled="true"
+											 creationComplete="{this.viewCreationComplete()}"
+											 mouseDown="{this.tvViewsMouseDown(event)}"
+											 doubleClick="{this.tvViewsDoubleClick(event)}">
+									</mx:Tree>
+								</mx:VBox>
+							</mx:VBox>
+						</mx:Accordion>
+					</mx:VBox>
+				</mx:VBox>
+			</mx:HBox>
+			<mx:HBox id="rightPanel"
+					 width="70%"
+					 height="100%"
+					 borderStyle="solid"
+					 borderColor="#6593cf">
+				<mx:VBox id="topPanel"
+						 label="Top Panel"
+						 width="100%"
+						 height="100%"
+						 verticalGap="2">
+					<mx:HBox width="100%" height="100%">
+						<containers:SuperTabNavigator id="tabNav"
+							width="100%"
+							height="100%"
+							scrollSpeed="25" 
+						    stopScrollingEvent="{MouseEvent.MOUSE_UP}" 
+						    startScrollingEvent="{MouseEvent.MOUSE_DOWN}"
+							horizontalGap="0"
+							dragEnabled="true"
+							dragEnter="{this.dragEnterHandler(event)}"
+							dragExit="{this.dragDropHandler(event)}"
+							change="{this.changeTabHandler()}"
+							tabRemoved="{this.tabRemoveHandler(event)}"/>
+					</mx:HBox>
+				</mx:VBox>
+			</mx:HBox>
+		</mx:HDividedBox>
+	</mx:VBox>
+</hc:HK_TitleWindow>

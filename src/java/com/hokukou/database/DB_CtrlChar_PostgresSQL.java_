@@ -1,0 +1,106 @@
+package com.hokukou.database;
+/*
+********************************************************************************
+================================================================================
+   PostgreSQL 用
+================================================================================
+********************************************************************************
+*/
+
+public class DB_CtrlChar {
+
+	//SQLインジェクション対策
+	public static String edit(String strValue) {
+		String strReturn;
+		String strWk;
+		Character chrWk;
+
+		strReturn = "";
+
+		if (strValue != null) {
+			for (int i = 0; i < strValue.length(); i++) {
+				chrWk = strValue.charAt(i);
+				switch (chrWk) {
+				case '\'':
+					strWk = "''";
+					break;
+				case '\\':
+					strWk = "\\\\";
+					break;
+				default:
+					strWk = chrWk.toString();
+				}
+				strReturn = strReturn + strWk;
+			}
+		}
+		return strReturn;
+	}
+	
+	//(Private) SQLインジェクション対策（LIKE文専用）
+	private static String editLike(String strValue) {
+		String strReturn;
+		String strWk;
+		Character chrWk;
+
+		strReturn = "";
+
+		if (strValue != null) {
+			for (int i = 0; i < strValue.length(); i++) {
+				chrWk = strValue.charAt(i);
+				switch (chrWk) {
+				case '\'':
+					strWk = "''";
+					break;
+				case '%':
+					strWk = "\\\\%";
+					break;
+				case '_':
+					strWk = "\\\\_";
+					break;
+				case '[':
+					strWk = "\\\\[";
+					break;
+				case ']':
+					strWk = "\\\\]";
+					break;
+				case '^':
+					strWk = "\\\\^";
+					break;
+				default:
+					strWk = chrWk.toString();
+				}
+				strReturn = strReturn + strWk;
+			}
+		}
+
+		return strReturn;
+	}
+	
+	//(Private)入力された値から、前方一致か中間一致かを切分け
+	private static String addPercent(String strValue) {
+		String strReturn;
+		
+		if (strValue == null || strValue.length() == 0) {
+			strReturn = "";
+		} else {
+			if (strValue.charAt(0) == ' ' || strValue.charAt(0) == '　') {
+				strReturn = "%" + strValue.substring(1) + "%";
+			} else {
+				strReturn = strValue + "%";
+			}
+		}
+		return strReturn;
+	}
+	
+	//入力された値から、前方一致か中間一致かを切分け ＆　SQLインジェクション対策
+	public static String editPercent(String strValue) {
+		String strReturn;
+		
+		if (strValue == null || strValue.length() == 0) {
+			strReturn = "";
+		} else {
+			strReturn = DB_CtrlChar.addPercent(DB_CtrlChar.editLike(strValue));
+		}
+		return strReturn;
+	}
+}

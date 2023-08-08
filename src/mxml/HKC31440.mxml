@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	 ********************************************************************************
+	 ================================================================================
+	 DB View
+	 ================================================================================
+	 Program Number  : HKC31430.mxml
+	 Program Name    : View data sql(VIEW保存)
+	 Program Date    : 2009/04/25
+	 Programmer      : linhnq
+
+	 ===< Update History >===========================================================
+	 2009/04/25:Start											         = linhnq
+	 ================================================================================
+	 ********************************************************************************
+-->
+
+<hc:HK_TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				   xmlns:hc="HK_Common.HK_Control.*"
+				   xmlns:hs="HK_Common.HK_S2Flex2.*"
+				   xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+				   creationComplete="creationCompleteHK_TitleWindow(event)"
+				   showHelpButton="true"
+				   layout="absolute"
+				   width="440"
+				   height="133"
+				   title="View保存"
+				   closingMessage="true"
+				   styleMode="msginfo"
+				   xmlns:ns1="com.controls.*">
+
+	<hs:HK_S2Flex2Service id="HKC31400J"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<mx:Script>
+		<![CDATA[
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import HK_Common.HK_Control.HK_ControlCnst.ReadState;
+			import HK_Common.HK_Data.*;
+			import HK_Common.HK_S2Flex2.*;
+			
+			import com.controls.baseClasses.EntityControl;
+			import com.events.SaveSuccessEvent;
+			
+			import mx.collections.*;
+			import mx.controls.dataGridClasses.*;
+			import mx.core.Application;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.events.IndexChangedEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.StringUtil;
+
+			<!--
+		************************************************************
+		***** Private 変数
+		************************************************************
+		-->
+			private var mdm:HK_ModuleManager;
+			private var strDefinition:String;
+			private var msg:HK_MsgBox;
+			<!--
+		************************************************************
+		***** フォームイベント
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- フォームが表示された時の処理                               -->
+			<!--============================================================-->
+
+			protected function creationCompleteHK_TitleWindow(event:FlexEvent):void
+			{
+				this._initForm();
+				var obj:Object=this.helpCode;
+				strDefinition=obj["sql"].toString();				
+				txtView.setFocus();
+			}
+
+			<!--============================================================-->
+			<!-- GridでのKeyDownが発生したとき                              -->
+			<!--============================================================-->
+
+			override public function keyDownCell(event:KeyboardEvent):void
+			{
+
+			}
+
+			<!--
+        ************************************************************
+        ***** SubForm イベント
+        ************************************************************
+        -->
+			<!--============================================================-->
+			<!-- 検索マークがクリックされた時の処理                         -->
+			<!--============================================================-->
+
+			override public function clickHelp(uicCtrl:UIComponent):void
+			{
+
+				return;
+			}
+
+			<!--=============================================================-->
+			<!-- 子フォームが閉じられ、自フォームへFocusが戻ってきた時の処理 -->
+			<!--=============================================================-->
+
+			override public function closeSubWindow(tlwWindow:HK_TitleWindow, uicInputControl:UIComponent):void
+			{
+			}
+
+			<!--
+		************************************************************
+		***** ボタンイベント
+		************************************************************
+		-->
+
+			<!--============================================================-->
+			<!-- Save view information -->
+			<!--============================================================-->
+
+			private function saveViewInfo():void
+			{
+				var arr:Array=new Array();
+				var obj:Object=new Object();
+				obj["viewname"]=txtView.text;
+				obj["definition"]=strDefinition;
+				obj["a02_viewname"] = obj["viewname"]
+				obj["a02_tables"] = this.helpCode["tables"].toString();
+				obj["a02_relations"] = this.helpCode["relations"].toString();
+				obj["a02_columns"] = this.helpCode["columns"].toString();
+				obj["C04_CD"] = this.userID;
+				obj["Term"] = this.termID;
+				arr.push(obj);			
+				this.HKC31400J.saveViewSql(arr);				
+			}
+
+			private function _start_readDataFromSql():void{								
+				this.HKC31400J.readDataFromSql(new Array(this.helpCode));
+			}
+			
+			public function _onResult_readDataFromSql(event:ResultEvent):void{
+				var expData:Array = event.result as Array;
+				switch(expData[0][0]["status"]){
+					case "existdata":
+						callLater(saveViewInfo);
+						break;
+					/* case "nodata":
+						this.setAllEnabled();
+						break; */
+					case "nodata":
+						callLater(saveViewInfo);
+						break;
+					case "error":
+						this.closingMessage = false;
+						var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError,this,"読込エラー", MsgButton.Ok);
+						//msg.message = expData[0][0]["info"];
+						msg.message = "SQLステートメントは無効です。 規則をチェックしてください。";
+						msg.cmdOk = _clickBtnEnd;
+						msg.open();
+						break;
+				}
+			}
+			public function _onResult_saveViewSql(event:ResultEvent):void
+			{				
+				if (event.result >= 0)
+				{					
+					this.closingMessage=false;
+					msg=new HK_MsgBox(StyleMode.MsgWarning, this, "確認", MsgButton.Ok);
+					msg.message="ビューの保存が完了しました｡";
+					msg.cmdOk=_clickBtnEnd;
+					msg.open();
+					var myEvent:SaveSuccessEvent = new SaveSuccessEvent(SaveSuccessEvent.saveSuccess, txtView.text);
+					this.owner["myDispatch"](myEvent);
+					var p:Object=this.owner;
+					var objArg:Object=new Object();
+					objArg["viewname"]=txtView.text;
+					p["changeViewName"](objArg);											
+				}
+				else
+				{
+					this.closingMessage=false;
+					msg=new HK_MsgBox(StyleMode.MsgError, this, "保存エラー", MsgButton.Ok);
+					msg.message = "ビューの内容またはビュー名を確認し、再度、保存下さい。"
+					msg.cmdOk=_clickBtnEnd;
+					msg.open();
+				}
+			}
+
+			<!--============================================================-->
+			<!-- 終了ボタンを押下した時の処理                               -->
+			<!--============================================================-->
+
+			private function _clickBtnEnd():void
+			{
+				this.close();
+			}
+
+			<!--
+		************************************************************
+		***** Private メソッド
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- 初期化処理                                                 -->
+			<!--============================================================-->
+
+			private function _initForm():void
+			{
+				var arr:Array=new Array();
+				var obj:Object=new Object();
+				arr.push(obj);
+			}
+
+			private function checkBankQuery():Boolean
+			{	
+				if (StringUtil.trim(txtView.text) == "")
+				{
+					this.closingMessage=false;
+					msg=new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+					msg.message="Viewのために名前を入力してください。";
+					msg.open();
+					txtView.setFocus();
+					return false;
+				}
+				return true;
+			}
+			
+			private function notSpecialChars(str:String):Boolean{
+				//var reg:RegExp = new RegExp("/^[A-Za-z_]\w*$/", "g");
+				
+				var bOK:Boolean = true;
+				var arrSC:Array = new Array();
+				
+				arrSC.push("~");
+				arrSC.push("`");
+				arrSC.push("?");
+				arrSC.push("<");
+				arrSC.push("<=");
+				arrSC.push(">");
+				arrSC.push(">=");
+				arrSC.push("*");
+				arrSC.push("+");
+				arrSC.push("-");
+				arrSC.push(":");
+				arrSC.push('/');
+				arrSC.push('\\');
+				arrSC.push('|');
+				arrSC.push('&');
+				arrSC.push("^");
+				arrSC.push("%");
+				arrSC.push("@");
+				arrSC.push("$");
+				arrSC.push("!");
+				arrSC.push("(");
+				arrSC.push(")");
+				arrSC.push("{");
+				arrSC.push("}");
+				arrSC.push("[");
+				arrSC.push("]");
+				arrSC.push(",");
+				arrSC.push(".");
+				arrSC.push("\"");
+				arrSC.push("\'");
+				
+				for(var i:int = 0; i < 10; i++){
+					if(str.indexOf(i.toString()) == 0){
+						bOK = false;
+						break;		
+					}
+				}
+				
+				if(bOK){
+					for each(var char:String in arrSC){
+						if(str.indexOf(char) >= 0){
+							bOK = false;
+							break;
+						}
+					}
+				}
+				
+				return bOK;
+			}
+
+			private function btnSaveView_Click():void
+			{
+				if (checkBankQuery() == true)
+				{
+					var arr:Array=new Array();
+					var obj:Object=new Object();
+					// format viewname ======================
+					var strTmp:String =txtView.text;
+					while(strTmp.indexOf(" ") >=0)
+					{
+						strTmp = strTmp.replace(" ","");
+					}
+					strTmp = strTmp.toLocaleLowerCase();
+					txtView.text = strTmp;
+					//=======================================
+					obj["viewname"]=txtView.text;
+					arr.push(obj);
+					
+					if(!notSpecialChars(obj["viewname"])){
+						this.closingMessage=false;
+						msg=new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+						msg.message = "Viewは特殊文字を許容しません。";
+						msg.open();
+						return;
+					}
+					
+					if(Number(obj["viewname"])){
+						this.closingMessage=false;
+						msg=new HK_MsgBox(StyleMode.MsgError, this, "読込エラー", MsgButton.Ok);
+						msg.message = "Viewは数を許容しません。";
+						msg.open();
+						return;
+					}
+					this.HKC31400J.checkExistViewNameSql(arr);
+				}
+			}
+
+			public function _onResult_checkExistViewNameSql(event:ResultEvent):void
+			{	
+				if (event.result == 0)
+				{
+					this._start_readDataFromSql();
+				}
+				else
+				{
+					this.closingMessage=false;
+					msg=new HK_MsgBox(StyleMode.MsgError, this, "保存エラー", MsgButton.Ok);
+					msg.message="ビュー名が重複しています。"
+					//msg.cmdOk=_clickBtnEnd;
+					msg.open();
+				}
+			}
+
+			protected function txtView_focusInHandler(event:FocusEvent):void
+			{
+				txtView.imeMode="JAPANESE_HIRAGANA";
+			}
+
+		]]>
+	</mx:Script>
+	<mx:Canvas height="54"
+			   backgroundColor="#ddeeff"
+			   borderStyle="inset"
+			   width="100%">
+		<hc:HK_Label y="14"
+					 text="ビュー名"
+					 width="67"
+					 x="6" textAlign="right"/>
+		<hc:HK_TextInput id="txtView"
+						 x="79"
+						 y="12"
+						 maxChars="100"
+						 width="342"
+						 focusIn="txtView_focusInHandler(event)"/>
+	</mx:Canvas>
+	<hc:HK_Button id="btnEnd"
+				  label="戻る"
+				  focusEnabled="false"
+				  icon2="return"
+				  functionKey="F12"
+				  click="_clickBtnEnd()"
+				  shortCutKey="end"
+				  tabIndex="11"
+				  right="6"
+				  bottom="6"/>
+	<hc:HK_Button id="btnSaveView"
+				  click="{btnSaveView_Click()}"
+				  label="ﾋﾞｭｰ保存"
+				  focusEnabled="false"
+				  tabIndex="11"
+				  right="87"
+				  bottom="6"/>
+</hc:HK_TitleWindow>

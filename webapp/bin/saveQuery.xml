@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="UTF-8"?><ListSQL><SQL_Entity><sqlName></sqlName><sqlContent></sqlContent></SQL_Entity><SQL_Entity><sqlName>Linh test</sqlName><sqlContent>SELECT c10_faculty.c09_cd4,c10_faculty.c09_cd3,c10_faculty.c09_cd4 FROM c10_faculty </sqlContent></SQL_Entity></ListSQL>

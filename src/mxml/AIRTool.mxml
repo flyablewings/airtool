@@ -1,0 +1,869 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+********************************************************************************
+================================================================================
+   起動アプリケーション
+================================================================================
+   Program Number  : AIRTool.mxml
+   Program Name    : 起動アプリケーション
+   Program Date    : 2010/09/16
+   Programmer      : H.Fujimoto
+   
+===< Update History >===========================================================
+   2010/09/16 : 新規作成 ( mfuk_c2.mxml から複製 )
+================================================================================
+********************************************************************************
+-->
+
+<mx:WindowedApplication
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	layout="absolute" 
+	width="281"
+	height="142" 
+	showTitleBar="false"
+	showStatusBar="false"
+	fontFamily="ＭＳ ゴシック"
+	initialize="initializeHandler(event)"
+	creationComplete="creationCompleteHandler(event)"
+	title="AIRTool 起動中">
+
+	<mx:Script>
+		<![CDATA[
+			import mx.core.IFlexModuleFactory;
+			import mx.utils.StringUtil;
+			import mx.controls.HTML;
+			import mx.controls.Alert;
+			import mx.containers.TitleWindow;
+			import mx.core.Window;
+			import mx.events.FlexEvent;
+			import mx.events.ModuleEvent;
+			import mx.modules.IModuleInfo;
+			import mx.modules.ModuleManager;
+			import flash.filesystem.File;
+			
+			private var _mdm:IModuleInfo;
+			private var _win:Window;
+			
+			private var _protocol:String = "";
+			private var _hostName:String = "";
+			private var _port:String     = "";
+			private var _context:String = "";
+			private var _htmlName:String = "";
+			private var _blnDebug:Boolean = false;
+			private var _blnUpdate:Boolean = true;
+			
+			private var _arrSvFileList:Array;
+			private var _arrLcFileList:Array;
+			private var _arrGetFileList:Array;
+			
+			private var _numDownloadIndex:Number;
+			private var _strDownloadFileNM:String;
+			
+			//SWFモジュール更新モード
+			private var _strModuleUpdateMode:String = "application";	//system…システム起動時全更新、application…アプリ起動毎更新
+			
+			//ファイル一覧　ファイル名
+			private static var CNST_LC_FILELIST_FILENAME:String = "filelist_lc.txt";
+			private static var CNST_SV_FILELIST_FILENAME:String = "filelist_sv.txt";
+			private static var CNST_CONNECTION_FILENAME:String = "connection.txt";
+			private static var CNST_REQUIREDLIST_FILENAME:String = "requiredlist.txt";
+			
+			//ライセンス認証サーブレット
+			private static var CNST_MNGGLIC_SERVLET:String = "/servlet/ManageLic";
+			
+			//起動画面の枠(Window)
+			private static var CNST_WINDOW:String = "_Window";
+			
+			//swfダウンロード先 ディレクトリ
+			private static var CNST_SWF_STORE_PATH:String = File.applicationStorageDirectory.nativePath;
+			private static var CNST_INSTALL_PATH:String = File.applicationDirectory.nativePath;
+			private var _objSwfModule:Object = new Object();
+			
+			//共通ライブラリ ファイル名
+			private static var CNST_HKCOMMON_SWF:String = "HK_Common.swf";
+			
+			//起動引数index
+			private static var CNST_ARGS_PROTOCOL:Number = 0;
+			private static var CNST_ARGS_HOSTNAME:Number = 1;
+			private static var CNST_ARGS_PORT:Number     = 2;
+			private static var CNST_ARGS_CONTEXT:Number  = 3;
+			private static var CNST_ARGS_HTMLNAME:Number = 4;
+			private static var CNST_ARGS_DEBUG:Number    = 5;
+			
+            private var _blnIsFromBrowser:Boolean = false;
+	    	
+	    	/************************************************************
+			***** カスタムプロパティ
+			************************************************************/
+    		/**
+			 * アプリケーションファイル更新のタイミングを設定するプロパティ<br>
+			 * &nbsp;&nbsp;&nbsp;"system:システム起動時全更新", "application：アプリ起動毎更新"
+			 * @default "application" 
+			 */
+			public function get ModuleUpdateMode() : String {
+			    return this._strModuleUpdateMode;
+			}
+			/**
+			 * @private
+			 */
+			public function set ModuleUpdateMode(value:String) : void {
+	    		this._strModuleUpdateMode = value;
+      		}
+
+    		/**
+			 * メモリ上に保持しているswfモジュールを設定するプロパティ<br>
+			 */
+			public function get SwfModules() : Object {
+			    return this._objSwfModule;
+			}
+			/**
+			 * @private
+			 */
+			public function set SwfModules(value:Object) : void {
+	    		this._objSwfModule = value;
+      		}
+      		
+      		/**
+			 * swfモジュールをメモリ上に保持するプロパティ<br>
+			 */
+			public function setSwfModule(key:String, value:IFlexModuleFactory) : void {
+			    this._objSwfModule[key] = value;
+			}
+			
+      		/**
+			 * メモリ上のswfモジュールを取得するプロパティ<br>
+			 */
+			public function getSwfModule(key:String) : IFlexModuleFactory {
+				if (this._objSwfModule[key] != null) {
+					return this._objSwfModule[key] as IFlexModuleFactory;
+				} else {
+					return null;
+				}
+			}
+      		
+			/************************************************************
+			***** イベントハンドラー(this)
+			************************************************************/
+			/**
+			 * コンポーネントの構築と初期化プロパティの設定が完了したときの処理
+			 */
+			private function initializeHandler(e:Event):void {
+				NativeApplication.nativeApplication.addEventListener(BrowserInvokeEvent.BROWSER_INVOKE, this._browserInvokeHandler);
+				NativeApplication.nativeApplication.addEventListener(InvokeEvent.INVOKE, this._invokeHandler);
+				
+				//表示位置設定(画面中央へ)
+				var winX:Number = (Capabilities.screenResolutionX / 2) - (this.width / 2);
+				var winY:Number = (Capabilities.screenResolutionY / 2) - (this.height / 2);
+				this.move(winX, winY);
+			}
+			
+			/**
+			 * ブラウザ上から起動されたときの処理
+			 */
+			private function _browserInvokeHandler(event:BrowserInvokeEvent):void {
+				this._blnIsFromBrowser = true;
+				this._setServerInfoArgs(event.arguments);
+			}
+			
+			/**
+			 * アプリケーションが起動されたときの処理(ブラウザ起動時もbrowserInvokeの後に通るがargumentsはnull)
+			 */
+			private function _invokeHandler(event:InvokeEvent):void {
+				var strDebug:String;
+				var numS:Number;
+				
+				//デバッグモード設定
+				strDebug = event.arguments[0];
+				if (strDebug) {
+					strDebug = StringUtil.trim(strDebug);
+					strDebug = strDebug.toUpperCase();
+					numS = strDebug.indexOf("DEBUG=");
+					if (numS > -1) {
+						if (strDebug.substring(numS+6) == "TRUE") {
+							this._blnDebug = true;
+						}
+					}
+				}
+			}
+			
+			/**
+			 * コンポーネントの構築、プロパティ処理、測定、レイアウト、および描画が完了したときの処理
+			 */
+			private function creationCompleteHandler(e:Event):void {
+				//フォームクリア
+				this.lblStatus.text = "";
+				this.lblFile.text = "";
+				
+				//接続情報ファイル、必須ファイルリストがappstorageに無ければappからコピー
+				if (this._blnDebug == false) {
+					//初回起動時のみ実施する
+					var strSobjNM:String = "HK_Common.InstallTime";
+					var fileMI:File = File.applicationDirectory.resolvePath("META-INF");
+					if(fileMI.exists) {
+						//SharedObjectの名前の末尾にファイルの作成日時を加える
+						strSobjNM = strSobjNM + fileMI.creationDate.time;
+					}
+					var sobjInstallTime:SharedObject = SharedObject.getLocal(strSobjNM);
+					if(sobjInstallTime.size == 0) {
+						this._copyConnectionFileToStorage();
+						this._copyRequiredListToStorage();
+					}
+				}
+				
+				if (this._blnIsFromBrowser) {
+					//接続情報ファイル書込
+					this._writeConnectionInfo();
+				} else {
+					//接続情報ファイル読込
+					if (this._readConnectionInfo() == false) {
+						Alert.show("接続先設定ファイルがありません。", "起動時エラー");
+						return;
+					}
+				}
+				
+				//起動処理開始
+				this._start();
+			}
+			
+			/**
+			 * 接続先設定ファイルをapp-storageへコピーする処理
+			 */
+			private function _copyConnectionFileToStorage():void {
+				var fileInstall:File = new File(CNST_INSTALL_PATH   + "/" + CNST_CONNECTION_FILENAME);
+				var fileStore:File   = new File(CNST_SWF_STORE_PATH + "/" + CNST_CONNECTION_FILENAME);
+				
+				if (fileStore.exists == false) {
+					if (fileInstall.exists) {
+						fileInstall.copyTo(fileStore, true);
+					}
+				}
+			}
+			
+			/**
+			 * 必須ファイルリストをapp-storageへコピーする処理
+			 */
+			private function _copyRequiredListToStorage():void {
+				var fileInstall:File = new File(CNST_INSTALL_PATH   + "/" + CNST_REQUIREDLIST_FILENAME);
+				var fileStore:File   = new File(CNST_SWF_STORE_PATH + "/" + CNST_REQUIREDLIST_FILENAME);
+				
+				if (fileStore.exists == false) {
+					if (fileInstall.exists) {
+						fileInstall.copyTo(fileStore, true);
+					}
+				}
+			}
+			
+			/************************************************************
+			***** イベントハンドラー(ModuleManager)
+			************************************************************/
+			/**
+			 * ログイン画面を表示する処理
+			 */
+			private function _requestShowLoginWindow():void {
+				if (this._blnDebug) {
+					this._mdm = ModuleManager.getModule(this._htmlName + CNST_WINDOW + ".swf");
+					this._mdm.addEventListener(ModuleEvent.READY, this._showLoginWindow);
+					this._mdm.addEventListener(ModuleEvent.ERROR, this._showErr);
+					this._mdm.load();
+				} else {
+					var loader:URLLoader = new URLLoader();
+					loader.dataFormat = URLLoaderDataFormat.BINARY;
+					loader.addEventListener(Event.COMPLETE, _moduleLoadedCompleteHandler);
+					loader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, _showErr);
+					loader.addEventListener(IOErrorEvent.IO_ERROR, _showErr);
+					loader.load(new URLRequest("app-storage:/" + this._htmlName + CNST_WINDOW + ".swf"));
+				}
+			}
+			
+			private function _showErr(event:Event):void {
+				if (event.type == SecurityErrorEvent.SECURITY_ERROR) {
+	        		this._showError("ログイン画面表示処理でセキュリティーエラーが発生しました。");
+	        	} else if (event.type == IOErrorEvent.IO_ERROR) {
+	        		this._showError("ログイン画面表示処理でIOエラーが発生しました。");
+	        	} else {
+	        		this._showError("ログイン画面表示処理でエラーが発生しました。");
+	        	}
+			}
+			
+			private function _moduleLoadedCompleteHandler(e:Event) : void {
+				
+			    var loader:URLLoader = URLLoader(e.target);
+			    var data:ByteArray = ByteArray(loader.data);
+				var moduleLoader:Loader = new Loader();
+				var context:LoaderContext = new LoaderContext();
+				context.allowLoadBytesCodeExecution = true;
+				context.applicationDomain = ApplicationDomain.currentDomain;    
+				
+				moduleLoader.loadBytes(data, context);
+				moduleLoader.contentLoaderInfo.addEventListener(Event.COMPLETE, _completeLoader);
+			}
+			
+			private function _completeLoader(e:Event): void {
+			    var moduleLoader:LoaderInfo = LoaderInfo(e.target);
+			    moduleLoader.content.addEventListener("ready", _showLoginWindow);
+			}
+			
+			/************************************************************
+			***** イベントハンドラー(window)
+			************************************************************/
+			/**
+			 * コンポーネントの構築、プロパティ処理、測定、レイアウト、および描画が完了したときの処理
+			 */
+			private function winCreationCompleteHandler(event:FlexEvent):void {
+				this._win.removeEventListener(FlexEvent.CREATION_COMPLETE, this.winCreationCompleteHandler);
+				this.visible = false;	//closeしてしまうと以降の画面でIMEモードがONにならない
+				
+				//初回起動フラグ
+				if (this._blnDebug == false) {
+					var strSobjNM:String = "HK_Common.InstallTime";
+					var fileMI:File = File.applicationDirectory.resolvePath("META-INF");
+					if(fileMI.exists) {
+						//SharedObjectの名前の末尾にファイルの作成日時を加える
+						strSobjNM = strSobjNM + fileMI.creationDate.time;
+					}
+					var sobjInstallTime:SharedObject = SharedObject.getLocal(strSobjNM);
+					sobjInstallTime.data.dummy = true;
+					sobjInstallTime.flush();
+				}
+			}
+			
+			/**
+			 * ウィンドウが閉じられた後の処理
+			 */
+			private function winCloseHandler(event:Event):void {
+				this.close();
+			}
+			
+			/************************************************************
+			***** カスタムメソッド(Private)
+			************************************************************/
+			/**
+			 * 起動引数からサーバー接続情報を取得する処理
+			 */
+			private function _setServerInfoArgs(arrArgs:Array):void {
+				if (this._protocol == "") {
+					this._protocol = String(arrArgs[CNST_ARGS_PROTOCOL]);
+					this._hostName = String(arrArgs[CNST_ARGS_HOSTNAME]).replace(new RegExp(/:/g), ".");	//"."は引数値として使用できないため、":"を代用。（使用可能文字 A-Za-z0-9:-=）
+					this._port     = String(arrArgs[CNST_ARGS_PORT]);
+					this._context  = String(arrArgs[CNST_ARGS_CONTEXT]).replace(new RegExp(/=/g), "_");	//"_"は引数値として使用できないため、"="を代用。（使用可能文字 A-Za-z0-9:-=）
+					this._htmlName = String(arrArgs[CNST_ARGS_HTMLNAME]);
+				}
+			}
+			
+			/**
+			 * 接続情報をファイルに保存する処理
+			 */
+			private function _writeConnectionInfo():void {
+				var aryConnect:Array;
+				aryConnect = new Array();
+				aryConnect.push("<protocol>" + this._protocol + "</protocol>");
+				aryConnect.push("<host>"     + this._hostName + "</host>");
+				aryConnect.push("<port>"     + this._port     + "</port>");
+				aryConnect.push("<context>"  + this._context  + "</context>");
+				aryConnect.push("<html>"     + this._htmlName + "</html>");
+				this._writeFile(CNST_SWF_STORE_PATH + "/" + CNST_CONNECTION_FILENAME, aryConnect);
+			}
+			
+			/**
+			 * 接続情報をファイルから読込む処理
+			 */
+			private function _readConnectionInfo():Boolean {
+				var numLmnS:Number;
+				var numLmnE:Number;
+				var file:File;
+				var strData:String;
+				var blnReturn:Boolean;
+				
+				if (this._blnDebug) {
+					file = new File(CNST_INSTALL_PATH + "/" + CNST_CONNECTION_FILENAME);
+				} else {
+					file = new File(CNST_SWF_STORE_PATH + "/" + CNST_CONNECTION_FILENAME);
+				}
+				
+				if (file.exists) {
+					var fileStream:FileStream = new FileStream();
+					fileStream.open(file, FileMode.READ);
+					strData = fileStream.readMultiByte(fileStream.bytesAvailable, "UTF-8")
+					fileStream.close();
+					
+					//プロトコル
+					numLmnS = strData.indexOf("<protocol>") + 10;
+					numLmnE = strData.indexOf("</protocol>");
+					this._protocol = strData.substring(numLmnS, numLmnE);
+					
+					//ホスト
+					numLmnS = strData.indexOf("<host>") + 6;
+					numLmnE = strData.indexOf("</host>");
+					this._hostName = strData.substring(numLmnS, numLmnE);
+					
+					//ポート
+					numLmnS = strData.indexOf("<port>") + 6;
+					numLmnE = strData.indexOf("</port>");
+					this._port = strData.substring(numLmnS, numLmnE);
+					
+					//コンテキスト
+					numLmnS = strData.indexOf("<context>") + 9;
+					numLmnE = strData.indexOf("</context>");
+					this._context = strData.substring(numLmnS, numLmnE);
+					
+					//ログイン画面ID
+					numLmnS = strData.indexOf("<html>") + 6;
+					numLmnE = strData.indexOf("</html>");
+					this._htmlName = strData.substring(numLmnS, numLmnE);
+					
+					blnReturn = true;
+				} else {
+					blnReturn = false;
+				}
+				return blnReturn;
+			}
+			
+			/**
+			 * 起動処理開始
+			 */
+			private function _start():void {
+				//マウスカーソル
+				this.cursorManager.setBusyCursor();
+				
+				if (this._blnDebug) {
+					//ログイン画面起動
+					this.lblStatus.text = "システムを起動しています。";
+					this._requestShowLoginWindow();
+				} else {
+					//SWFダウンロード
+					this.lblStatus.text = "サーバーに接続しています。";
+					this._requestRequiredFileList();
+				}
+			}
+			
+			/**
+			 * ログイン画面を表示する処理
+			 */
+			private function _showLoginWindow(event:Event):void {
+				if (this._blnDebug) {
+					this._win = Window(ModuleEvent(event).module.factory.create());
+				} else {
+					var factory:IFlexModuleFactory = IFlexModuleFactory(event.target);
+					this._win = Window(factory.create());
+				}				
+				
+				this._win.addEventListener(FlexEvent.CREATION_COMPLETE, this.winCreationCompleteHandler);
+				this._win.addEventListener(Event.CLOSE, this.winCloseHandler);
+				
+				//dataプロパティを一時的に使用してサーバー情報を渡す
+				var objArgs:Object = new Object();
+				objArgs["protocol"] = this._protocol;
+				objArgs["hostName"] = this._hostName;
+				objArgs["port"] = this._port;
+				objArgs["context"] = this._context;
+				objArgs["htmlName"] = this._htmlName;
+				objArgs["debug"] = this._blnDebug;
+				objArgs["update"] = this._strModuleUpdateMode;
+				this._win.data = objArgs;
+				this._win.open(true);
+				
+				//マウスカーソル
+				this.cursorManager.removeBusyCursor();
+			}
+			
+			/**
+			 * 必須ファイルリストをダウンロードする処理
+			 */
+	        private function _requestRequiredFileList():void {
+	        	var loader:URLLoader;
+	        	var request:URLRequest;
+	        	var strUrl:String;
+	        	
+	        	loader = new URLLoader();
+	        	loader.addEventListener(Event.COMPLETE, this._updateRequiredFileList);
+	        	loader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, this._updateRequiredFileList);
+	        	loader.addEventListener(IOErrorEvent.IO_ERROR, this._updateRequiredFileList);
+				
+				strUrl = this._getUrl() + "/swf/" + CNST_REQUIREDLIST_FILENAME;
+				request = new URLRequest(strUrl);
+	            
+	            try {
+	            	
+	            	loader.dataFormat = URLLoaderDataFormat.BINARY;
+	                loader.load(request);
+	                
+	            } catch (error:Error) {
+	        		this._showError("モジュール更新時にエラーが発生しました。");
+	            }
+	        }
+			
+			/**
+			 * 必須ファイルリストを保存する処理
+			 */
+	        private function _updateRequiredFileList(event:Event):void {
+	        	if (event.type == Event.COMPLETE) {
+		            var loader:URLLoader;
+		            var file:File;
+					var stream:FileStream;
+					var byteArr:ByteArray;
+					
+					loader = URLLoader(event.target);
+					file = new File(CNST_SWF_STORE_PATH + "/" + CNST_REQUIREDLIST_FILENAME);
+					
+					stream = new FileStream();
+					byteArr = new ByteArray();
+					
+					URLLoader(event.currentTarget).data;
+					stream.open(file, FileMode.WRITE);
+					stream.writeBytes(URLLoader(event.currentTarget).data);
+					stream.close();
+	        	}
+	        	
+				//サーバーファイル一覧取得処理
+				this._requestSvFileList();
+	        }
+			
+			/**
+			 * サーバーファイル一覧を取得する処理
+			 */
+			private function _requestSvFileList():void {
+				var urlRequest:URLRequest;
+				var urlLoader:URLLoader;
+				
+				//サーバーファイル一覧を取得する
+				urlRequest = new URLRequest();
+				urlRequest.url = this._getUrl() + CNST_MNGGLIC_SERVLET;
+				urlLoader = new URLLoader();
+				urlLoader.load(urlRequest);
+				urlLoader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, this._getSvFileList);
+				urlLoader.addEventListener(IOErrorEvent.IO_ERROR,             this._getSvFileList);
+				urlLoader.addEventListener(Event.COMPLETE,                    this._getSvFileList);
+			}
+			
+            /**
+			 * サーバーファイル一覧を取得する処理
+			 */
+			private function _getSvFileList(event:Event) : void {
+				var blnOK:Boolean = false;
+				var blnJapan:Boolean = true;
+				var strErrMsg:String = "";
+				var strData:String = "";
+				var line:String = "";
+				var strLmnData:String = "";
+				var arrRequiredList:Array = new Array();
+				this._arrGetFileList = new Array();
+				
+				if (event.type == Event.COMPLETE) {
+					var loader:URLLoader = URLLoader(event.target);
+					var numLmnS:Number;
+					var numLmnE:Number;
+					
+					strData = String(loader.data);
+					
+					/** ライセンス情報の取得 **/
+					numLmnS = strData.indexOf("<lmn>") + 5;
+					numLmnE = strData.indexOf("</lmn>");
+					strLmnData = strData.substring(numLmnS, numLmnE);
+					
+					if (strLmnData.substr(0,3) == "OKJ") {
+						blnOK = true;
+					} else if (strLmnData.substr(0,3) == "OKC") {
+						blnOK = true;
+						blnJapan = false;
+					} else {
+						strErrMsg = strLmnData;
+					}
+					
+					/** サーバーファイルリストの取得 **/
+					strData = strData.replace(new RegExp(/\r\n/g),"\r") + "\r";
+					this._arrSvFileList = strData.split(new RegExp(/\r/g)).slice(2, -1);
+					
+					/** ローカルファイルリストの取得 **/
+					this._getLocalFileList();
+					
+					/** 起動時必須ファイルリストの取得 **/
+					if (this._strModuleUpdateMode == "application") {
+						var arrRequiredData:Array = new Array();
+						var file:File = new File(CNST_SWF_STORE_PATH + "/" + CNST_REQUIREDLIST_FILENAME);
+						
+						if (file.exists) {
+							var fileStream:FileStream = new FileStream();
+							fileStream.open(file, FileMode.READ);
+							var str:String = fileStream.readMultiByte(fileStream.bytesAvailable, "UTF-8");
+							if (null != str) {
+								str = str.replace(new RegExp(/\r\n/g),"\r");
+								arrRequiredData = str.split(new RegExp(/\r/g));
+							}
+							fileStream.close();
+							
+							for each (line in arrRequiredData) {
+								numLmnS = line.indexOf("<required>") + 10;
+								numLmnE = line.indexOf("</required>");
+								arrRequiredList.push(line.substring(numLmnS, numLmnE));
+							}
+						}
+					}
+					
+					/** 更新日時を比較 **/
+					for each (line in this._arrSvFileList) {
+						var arrData:Array;
+						var strSvFileName:String;
+						var numSvUpdateTime:Number;
+						
+						arrData = this._getFileData(line);
+						
+						strSvFileName = arrData[0];
+						numSvUpdateTime = Number(arrData[1]);
+						
+						//アプリ起動毎更新の場合、ログイン画面のみ更新する
+						if (this._strModuleUpdateMode == "application") {
+							if (strSvFileName != this._htmlName + ".swf"
+							 && strSvFileName != this._htmlName + CNST_WINDOW + ".swf"
+							 && arrRequiredList.indexOf(strSvFileName) == -1) {
+								continue;	//skip
+							}
+						}
+						//ローカルファイルと更新日付を比較する
+						if (this._checkIsOlderLcFile(strSvFileName, numSvUpdateTime)) {
+							this._arrGetFileList.push(line);
+						}
+					}
+					
+					/** ファイルをダウンロード **/
+					_numDownloadIndex = -1;
+					this._requestDownloadSvFile();
+					
+				} else if (event.type == SecurityErrorEvent.SECURITY_ERROR) {
+					strErrMsg = "サーバー接続時にセキュリティーエラーが発生しました。"
+				} else if (event.type == IOErrorEvent.IO_ERROR) {
+					strErrMsg = "サーバーに接続できません。(ｻｰﾊﾞｰ名:" + this._hostName + ")";
+				} else {
+					strErrMsg = "サーバー接続時にエラーが発生しました。";
+				}
+				if (blnOK == false) {
+					this._showError(strErrMsg);
+				}
+			}
+			
+			/**
+			 * ファイル情報を取得する処理
+			 */
+			private function _getFileData(line:String):Array {
+				var numLmnS:Number;
+				var numLmnE:Number;
+				var arrReturn:Array;
+				
+				numLmnS = line.indexOf("<file>") + 6;
+				numLmnE = line.indexOf("</file>");
+				arrReturn = line.substring(numLmnS, numLmnE).split(new RegExp(/,/g));
+				
+				return arrReturn;
+			}
+			
+			/**
+			 * ローカルファイル一覧を取得する処理
+			 */
+			private function _getLocalFileList():void {
+				this._arrLcFileList = new Array();
+				
+				var file:File = new File(CNST_SWF_STORE_PATH + "/" + CNST_LC_FILELIST_FILENAME);
+				if (file.exists) {
+					var fileStream:FileStream = new FileStream();
+					fileStream.open(file, FileMode.READ);
+					var str:String = fileStream.readMultiByte(fileStream.bytesAvailable, "UTF-8");
+					if (null != str) {
+						str = str.replace(new RegExp(/\r\n/g),"\r");
+						this._arrLcFileList = str.split(new RegExp(/\r/g));
+					}
+					fileStream.close();
+				}
+			}
+			
+			/**
+			 * ローカルファイルの有無と更新日時を確認する処理
+			 */
+			private function _checkIsOlderLcFile(strSvFileName:String, numSvUpdateTime:Number):Boolean {
+				var isOlderLcFile:Boolean = true;
+				
+				for each (var line:String in this._arrLcFileList) {
+					var arrData:Array;
+					var strLcFileName:String;
+					var numLcUpdateTime:Number;
+					
+					arrData = this._getFileData(line);
+					
+					strLcFileName   = arrData[0];
+					numLcUpdateTime = Number(arrData[1]);
+					
+					if (strLcFileName == strSvFileName) {
+						if (numLcUpdateTime < numSvUpdateTime) {
+							//サーバーのファイルが最新
+							isOlderLcFile = true;
+						} else {
+							//ダウンロードの必要なし
+							isOlderLcFile = false;
+						}
+						break;
+					}
+				}
+				return isOlderLcFile;
+			}
+			
+			/**
+			 * モジュールをダウンロードする処理
+			 */
+			private function _requestDownloadSvFile():void {
+				var arrWriteLcFileList:Array;
+				var line:String;
+				
+				this.lblStatus.text = "最新モジュールをダウンロードしています。";
+				
+				//indexを進める
+				this._numDownloadIndex++;
+				
+				if (this._arrGetFileList.length > this._numDownloadIndex) {
+					/** ファイルダウンロード **/
+					line = this._arrGetFileList[this._numDownloadIndex];
+					var arrFile:Array = this._getFileData(line);
+					this.lblFile.text = "(" + arrFile[0] + ")";
+		           	this._strDownloadFileNM = arrFile[0];
+					this._requestGetSvFile(arrFile[0]);
+				} else {
+					/** ダウンロード完了 **/
+					//ファイルリスト保存
+					if (this._arrSvFileList.length > 0) {
+						arrWriteLcFileList = this._arrLcFileList;
+						//ダウンロードしたファイルの更新日時をローカルリストに反映する
+						for each (line in this._arrGetFileList) {
+							var blnIsExist:Boolean = false;
+							var arrFileG:Array = this._getFileData(line);
+							for (var i:Number = 0; i<this._arrLcFileList.length; i++) {
+								var arrFileW:Array = this._getFileData(this._arrLcFileList[i]);
+								if (arrFileG[0] == arrFileW[0]) {
+									blnIsExist = true;
+									arrWriteLcFileList[i] = line;
+									break;
+								}
+							}
+							if (blnIsExist == false) {
+								arrWriteLcFileList.push(line);
+							}
+						}
+						this._writeFile(CNST_SWF_STORE_PATH + "/" + CNST_LC_FILELIST_FILENAME, arrWriteLcFileList);
+						this._writeFile(CNST_SWF_STORE_PATH + "/" + CNST_SV_FILELIST_FILENAME, this._arrSvFileList);
+					}
+					//ログイン画面起動
+					this.lblStatus.text = "システムを起動しています。";
+					this.lblFile.text = "";
+					this._requestShowLoginWindow();
+				}
+			}
+			
+			/**
+			 * モジュールをダウンロードする処理
+			 */
+	        private function _requestGetSvFile(strFileName:String):void {
+	        	var loader:URLLoader;
+	        	var request:URLRequest;
+	        	var strUrl:String;
+	        	
+	        	loader = new URLLoader();
+	        	loader.addEventListener(Event.COMPLETE, this._updateFile);
+	        	loader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, this._updateFile);
+	        	loader.addEventListener(IOErrorEvent.IO_ERROR, this._updateFile);
+				
+				strUrl = this._getUrl() + "/swf/" + strFileName;
+				request = new URLRequest(strUrl);
+	            
+	            try {
+	            	
+	            	loader.dataFormat = URLLoaderDataFormat.BINARY;
+	                loader.load(request);
+	                
+	            } catch (error:Error) {
+	        		this._showError("モジュール更新時にエラーが発生しました。");
+	            }
+	        }
+			
+			/**
+			 * モジュールを保存する処理
+			 */
+	        private function _updateFile(event:Event):void {
+	        	if (event.type == Event.COMPLETE) {
+		            var loader:URLLoader;
+		            var file:File;
+					var stream:FileStream;
+					var byteArr:ByteArray;
+					
+					try {
+						loader = URLLoader(event.target);
+						file = File.applicationDirectory.resolvePath(CNST_SWF_STORE_PATH + "/" + _strDownloadFileNM);
+						
+						stream = new FileStream();
+						byteArr = new ByteArray();
+						
+						URLLoader(event.currentTarget).data;
+						stream.open(file, FileMode.WRITE);
+						stream.writeBytes(URLLoader(event.currentTarget).data);
+					} catch (e:Error) {
+					} finally {
+						stream.close();
+					}
+					
+					//プログレスバーを更新
+					this.pgb.setProgress(this._numDownloadIndex+1, this._arrGetFileList.length);
+					
+					//次のファイルをダウンロード
+					this._requestDownloadSvFile();
+					
+	        	} else if (event.type == SecurityErrorEvent.SECURITY_ERROR) {
+	        		this._showError("モジュール更新時にセキュリティーエラーが発生しました。");
+	        	} else if (event.type == IOErrorEvent.IO_ERROR) {
+	        		this._showError("モジュール更新時にIOエラーが発生しました。");
+	        	} else {
+	        		this._showError("モジュール更新時にエラーが発生しました。");
+	        	}
+	        }
+			
+			/**
+			 * 文字列をファイルに出力する処理
+			 */
+			private function _writeFile(strPath:String, arrValue:Array):void {
+	            var file:File;
+				var stream:FileStream;
+				var byteArr:ByteArray;
+				
+				var strWrite:String = "";
+				for (var i:Number=0; i<arrValue.length; i++) {
+					if (i > 0) {
+						strWrite = strWrite + "\r\n";
+					}
+					strWrite = strWrite + String(arrValue[i]);
+				}
+				
+				file = File.applicationDirectory.resolvePath(strPath);
+				stream = new FileStream();
+				byteArr = new ByteArray();
+				
+				stream.open(file, FileMode.WRITE);
+				stream.writeUTFBytes(strWrite);
+				stream.close();
+			}
+			
+			/**
+			 * エラーメッセージを表示する処理
+			 */
+			private function _showError(strErrMsg:String):void {
+				this.lblStatus.text = "システムを起動できませんでした。"
+				Alert.show(strErrMsg, "起動時エラー");
+				//マウスカーソル
+				this.cursorManager.removeBusyCursor();
+			}
+			
+			/**
+			 * サーバーのURLを取得する処理
+			 */
+			private function _getUrl():String {
+				return this._protocol + "://" + this._hostName + ":" + this._port + "/" + this._context
+			}
+		]]>
+	</mx:Script>
+	<mx:ProgressBar id="pgb" x="40" y="68" minimum="0" maximum="100" mode="manual"/>
+	<mx:Label id="lblStatus" x="41" y="45" text="最新モジュールをダウンロードしています" width="207"/>
+	<mx:Label id="lblFile" x="129" y="80" text="(XXX00000.swf)" width="111" textAlign="right" color="#444444"/>
+</mx:WindowedApplication>

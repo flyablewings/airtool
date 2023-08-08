@@ -1,0 +1,11 @@
+<required>HK_Common.swf</required>
+<required>AIRPrint.jar</required>
+<required>lib/barbecue-1.5-beta1.jar</required>
+<required>lib/commons-collections-2.1.1.jar</required>
+<required>lib/commons-logging-1.1.1.jar</required>
+<required>lib/flex-messaging-common.jar</required>
+<required>lib/flex-messaging-core.jar</required>
+<required>lib/jasperreports-2.0.2h.jar</required>
+<required>lib/merapi-0.0.30.jar</required>
+<required>lib/poi-3.0-FINAL.jar</required>
+<required>lib/tools.jar</required>

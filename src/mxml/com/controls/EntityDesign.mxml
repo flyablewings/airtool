@@ -1,0 +1,2368 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	 ********************************************************************************
+	 ================================================================================
+	 AIRTool
+	 ================================================================================
+	 Program Number  : EntityDesign.mxml
+	 Program Name    : Entity Board
+	 Program Date    : 2009/04/05
+	 Programmer      : linhnq
+
+	 ===< Update History >===========================================================
+
+	 ================================================================================
+	 ********************************************************************************
+-->
+<mx:Canvas width="100%"
+		 height="100%"
+		 xmlns:mx="http://www.adobe.com/2006/mxml"
+		 xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+		 xmlns:controls="com.controls.*"
+		 xmlns:hs="HK_Common.HK_S2Flex2.*"
+		 initialize="myInitial()"
+		 creationComplete="myCreationComplete()" >
+	<hs:HK_S2Flex2Service id="HKC31400J"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<mx:Metadata>
+        	/**
+			* event
+			*/
+			[Event( name = "error", type = "com.events.EntityEvent")]
+			[Event( name = "changeEntity", type = "com.events.EntityEvent")]
+			[Event( name="addTable", type="com.events.AddTableEvent")]
+			[Event( name = "removeColumn", type = "com.events.RemoveColumnEvent")]
+			[Event( name = "removeView", type = "com.events.RemoveViewEvent")]
+			[Event( name = "saveSuccess", type = "com.events.SaveSuccessEvent")]
+			[Event( name = "addTab", type = "com.events.AddTabEvent")]
+			[Event( name = "openDialog", type = "com.events.OpenSaveDialogEvent")]
+    	</mx:Metadata>
+	<mx:Script>
+		<![CDATA[
+			import HK_Common.HK_Control.HK_ControlCnst.StyleMode;
+			import HK_Common.HK_Control.HK_MsgBox;
+			import HK_Common.HK_Control.HK_TitleWindow;
+			import com.controls.baseClasses.EntityControl;
+			import com.controls.dataGrid.ItemDataCustom;
+			import com.controls.dataGrid.ItemRendererCustom;
+			import com.controls.relationClasses.BaseRelationRenderer;
+			import com.controls.relationClasses.DefaultRelationRenderer;
+			import com.controls.relationClasses.IRelationRenderer;
+			import com.events.AddTabEvent;
+			import com.events.AddTableEvent;
+			import com.events.EntityEvent;
+			import com.events.FieldEvent;
+			import com.events.OpenSaveDialogEvent;
+			import com.events.RemoveColumnEvent;
+			import com.events.RemoveViewEvent;
+			import com.events.SaveSuccessEvent;
+			import com.managers.IRelationManager;
+			import com.managers.RelationManager;
+			import com.objects.EntityPoint;
+			import com.objects.data.Column;
+			import com.objects.data.JoinOperator;
+			import com.objects.data.Table;
+			import com.sharesingle.GlobalShare;
+			
+			import flexlib.containers.SuperTabNavigator;
+			
+			import mx.binding.utils.BindingUtils;
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.ComboBox;
+			import mx.controls.List;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.controls.dataGridClasses.DataGridItemRenderer;
+			import mx.core.ContextualClassFactory;
+			import mx.core.IFlexModuleFactory;
+			import mx.core.IUIComponent;
+			import mx.events.DataGridEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.DragManager;
+			import mx.rpc.events.ResultEvent;
+			import mx.skins.halo.DataGridColumnDropIndicator;
+			import mx.utils.ArrayUtil;
+			import mx.utils.StringUtil;
+			
+			private var _lastColAdd:int=1;
+			private var _myIndex:int=0;
+			private var _myIndexDragDrop:int=-1;
+			//private var _objTitle:Object;
+			private var _strRelationView:String="";
+			private var _strColumnView:String="";
+			private var _arrTable_Coumns:Array;
+			private var _objColumnSelectedInfo:Object;
+			private var _isLoadView:Boolean = false;
+			public var _strViewName:String = "";
+			private var dic:Dictionary = null;
+			private var oArrTable:Array = new Array();
+			private var oArrSource:Array = new Array();
+			public var oArrTblCol:Array = new Array();
+			private var isDrag:Boolean = false;
+			private var arrWhere:Array;
+			private var arrOrder:Array;
+			private var operators:Array;
+			private var orders:Array;
+			private var defaultSRC:ArrayCollection;
+			private var menuItem:NativeMenuItem;
+			private var timer:Timer;
+			private var isSave:Boolean = false;
+			private var isPreview:Boolean = false;
+			private var _dropTarget:DisplayObject;
+			
+			[Bindable]
+			private var arr:ArrayCollection;
+			//XungNV added
+			private var joinOp:Array;
+			public var _IsLoadView:Boolean = false;
+			public var args:Object = new Object();
+			
+			private function _btnCollQuery_Click():void
+			{
+				try
+				{
+					if (vbQuery.height == 20)
+					{
+						vbQuery.percentHeight=20;
+						vbDesignGrid.percentHeight=90;
+						imgCollQuery.source="com/controls/Image/CollDown.png";
+						imgCollQuery.toolTip="隠す";
+					}
+					else
+					{
+						vbQuery.height=20;
+						vbDesignGrid.percentHeight=70;
+						imgCollQuery.source="com/controls/Image/CollUp.png";
+						imgCollQuery.toolTip="地図";
+					}
+				}
+				catch (error:Error)
+				{
+					
+				}
+			}
+			
+			private function _btnCollDesign_Click():void
+			{
+				try
+				{
+					if (vbGrid.height == 20)
+					{
+						hbCanVas.percentHeight=100;
+						vbGrid.height=210;
+						imgCollGrid.source="com/controls/Image/CollDown.png";
+						imgCollGrid.toolTip="隠す";
+					}
+					else
+					{
+						vbGrid.height=20;
+						hbCanVas.percentHeight=100;
+						imgCollGrid.source="com/controls/Image/CollUp.png";
+						imgCollGrid.toolTip="地図";
+					}
+				}
+				catch (error:Error)
+				{
+					
+				}
+			}	
+
+			<!--
+			************************************************************************
+			***** Initialization
+			************************************************************************
+			-->
+
+			private function myInitial():void
+			{	
+				operators = 
+				[
+					{label: "", data: ""},
+					{label: "＝", data: "="},
+					{label: "≠", data: "<>"},
+					{label: "＜", data: "<"},
+					{label: "≦", data: "<="},
+					{label: "＞", data: ">"},
+					{label: "≧", data: ">="},
+					{label: "～", data: "BETWEEN"},
+					{label: "始まる", data: "LIKEB"},
+					{label: "含む", data: "LIKEA"}
+				];
+				
+				orders = 
+				[
+					{label: "", data: ""},
+					{label: "昇順", data: "ASC"},
+					{label: "降順", data: "DESC"} 
+				];
+			}
+
+			private function myCreationComplete():void
+			{
+				_objColumnSelectedInfo=new Object();				
+				createDefaultTitleColumns();				
+				createDefaultColumns();
+				var menu:NativeMenu = new NativeMenu();
+				menuItem = new NativeMenuItem("ﾌｨｰﾙﾄﾞ削除");
+				menuItem.addEventListener(Event.SELECT, menuItemSelect);			
+				menu.addItem(menuItem);
+				this.gridProperties.contextMenu = menu;
+				this.entityView.addEventListener(AddTableEvent.addTable, addTablesHandler);
+				timer = new Timer(1000);
+				timer.start();
+				timer.addEventListener(TimerEvent.TIMER, timerElapse);				
+				EntityControl._titleWindow=this.entityView as Canvas;
+			}
+			
+			private function timerElapse(event:TimerEvent):void{
+				gridDataChange(null);
+			}
+			
+			private function addTablesHandler(event:AddTableEvent):void{
+				dispatchEvent(event);
+			}
+			
+			private function menuItemSelect(event:Event):void{
+				dispatchEvent(new RemoveColumnEvent(RemoveColumnEvent.remove));
+				//this.deleteSelectedField();
+			}
+			
+			private function gridDataChange(event:FlexEvent):void{
+				this.txtSQL.text = this.getSQLView()["sql"].toString();	
+				if(this.txtSQL.text.length > 0){
+					this.vbPreview.enabled = true;
+					this.btnExecute.enabled = true;
+				}
+				else{
+					this.vbPreview.enabled = false;
+					this.btnExecute.enabled = false;
+				}
+			}
+			
+			private function _btnPreCollQuery_Click():void
+			{
+				try
+				{
+					if (vbPreviewQuery.height == 20)
+					{
+						vbPreviewQuery.percentHeight=20;
+						vbShowPreview.percentHeight=100;
+						imgPreCollQuery.source="com/controls/Image/CollDown.png";
+						imgPreCollQuery.toolTip="隠す";
+					}
+					else
+					{
+						vbPreviewQuery.height=20;
+						vbShowPreview.percentHeight=100;
+						imgPreCollQuery.source="com/controls/Image/CollUp.png";
+						imgPreCollQuery.toolTip="地図";
+					}
+				}
+				catch (error:Error)
+				{
+					
+				}
+			}
+			
+			private function executeQuery():void{
+				cursorManager.setBusyCursor();
+				isPreview = true;
+				if(this.tabView.selectedIndex == 1){	
+					this.btnReset.enabled = false;					
+					if (this.txtSQL.text != null)
+					{
+						var objData:Object=new Object();
+						objData["sql"]=this.txtSQL.text;
+						this.HKC31400J.readDataFromSql(new Array(objData));
+					}
+				}
+				else{					
+					this.btnReset.enabled = true;
+					cursorManager.removeBusyCursor();
+				}				
+			}
+			
+			public function _onResult_readDataFromSql(event:ResultEvent):void
+			{				
+				var expData:Array=event.result as Array;
+
+				if (expData != null && expData[0][0]["status"] != "error")
+				{
+					if(this.isPreview){
+						this.gridResult.dataProvider = expData[1];
+						this.lblResult.text = "レコード（秒）: " + (expData[1] as Array).length;
+						this.txtPreQuery.text = this.txtSQL.text;
+						cursorManager.removeBusyCursor();
+					}				
+					else{
+						if (isSave)
+						{
+							callLater(openSaveView);
+						}
+						else
+						{
+							callLater(updateViewInfo);
+						}
+					}
+				}
+				else{			
+					cursorManager.removeBusyCursor();
+					var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgError, HK_TitleWindow(this.parentDocument), "エラー");
+					msg.message = "SQLステートメントが無効です。またはデータベースに接続できません。";
+					msg.open();
+				}
+			}	
+			
+			private function updateViewInfo():void
+			{
+				isSave=false;
+				var objArgs:Object=this.getSQLView();
+				var obj:Object=new Object();
+				
+				obj["viewname"]=_strViewName;
+				obj["oldviewname"]=_strViewName;
+				obj["definition"]=objArgs["sql"].toString();
+				obj["a02_viewname"]=obj["viewname"]
+				obj["a02_tables"]=objArgs["tables"].toString();
+				obj["a02_relations"]=objArgs["relations"].toString();
+				obj["a02_columns"]=objArgs["columns"].toString();
+				obj["a02_oldviewname"]=obj["a02_viewname"];
+				obj["C04_CD"]=this.parentDocument["userID"];
+				obj["Term"]=this.parentDocument["termID"];
+
+				this.HKC31400J.updateViewSql(new Array(obj));
+			}
+
+			public function _onResult_updateViewSql(event:ResultEvent):void
+			{
+				var msg:HK_MsgBox;
+				try
+				{
+					var expData:Object=event.result;
+					
+					if (expData != null)
+					{						
+						dispatchEvent(new SaveSuccessEvent(SaveSuccessEvent.saveSuccess, this._strViewName));
+						msg = new HK_MsgBox(StyleMode.MsgInfo, HK_TitleWindow(this.parentDocument), "メッセージ");
+						msg.message = "ビューが正常に更新されました";
+						msg.open();
+					}
+					else
+					{
+						msg = new HK_MsgBox(StyleMode.MsgError, HK_TitleWindow(this.parentDocument), "エラー");
+						msg.message = "ビューを更新でエラー";
+						msg.open();
+					}
+				}
+				catch (err:Error)
+				{
+					msg = new HK_MsgBox(StyleMode.MsgError, HK_TitleWindow(this.parentDocument), "エラー");
+					msg.message = "SQLステートメントが無効です。またはデータベースに接続できません。";
+					msg.open();
+				}
+				cursorManager.removeBusyCursor();
+			}
+
+			<!--
+			************************************************************************
+			***** PROPERTIES
+			************************************************************************
+			-->
+
+			public function get allTables():Array
+			{
+				return this.entityView.arrAllTables;
+			}
+			
+			public function get allAddedTables():Array{
+				return this.entityView.arrTablesAdded;
+			}
+
+			public function set allDefaultRelations(value:Array):void
+			{
+				this.entityView.arrAllDefaultRelation=value;
+			}
+
+			public function get allDefaultRelations():Array
+			{
+				return this.entityView.arrAllDefaultRelation;
+			}
+
+			public function set allTables(value:Array):void
+			{
+				this.entityView.arrAllTables=value;
+			}
+
+			public function get dataProvider():Dictionary
+			{
+				return this.entityView.dataProvider;
+			}
+
+			public function set dataProvider(value:Dictionary):void
+			{
+				this.entityView.dataProvider=value;
+			}
+
+			public function get entityCount():int
+			{
+				return entityView.entityCount;
+			}
+
+			private function _registerEvents():void
+			{
+				this.entityView.addEventListener(EntityEvent.CHANGEENTITY, changeEntity);
+			}
+			<!--============================================================-->
+			<!-- EntityEvent.CHANGEENTITYが発生したとき                              -->
+			<!--============================================================-->
+
+			public function changeEntity(event:EntityEvent):void
+			{
+				dispatchEvent(event.clone());
+				event.stopPropagation();
+			}
+			<!--
+			************************************************************************
+			***** FOR ER BOARD
+			************************************************************************
+			-->
+				<!--
+			************************************************************************
+			***** Event Handler
+			************************************************************************
+			-->
+			//xungnv added parameter isLoadView
+			public function addNewEntity(tbl:Table, createRealtionFromDatabase:Boolean=true, isLoadView:Boolean = false):void
+			{
+				entityView.addNewEntity(tbl, createRealtionFromDatabase, isLoadView);				
+				GlobalShare.insertColumns(tbl.TableName, tbl.Columns);
+				
+				//Loading table				
+				var contain:Boolean = false;
+				for each(var item:Object in oArrTable){
+					if(item["label"].toString() == tbl.Description){
+						contain = true;
+						break;
+					}					
+				}
+								
+				var ob:Object = new Object();
+				if(!contain){
+					ob["label"] = tbl.Description;
+					ob["data"] = tbl.TableName;	
+					oArrTable.push(ob);	
+				}
+				
+				gridProperties.dataProvider["source"][0]["itemData"] = oArrTable;
+			}
+
+			public function addNewEntityByColumns(strTableName:String, columns:Array):void
+			{
+				var tableDescription:String="";
+				var objTable:Object;
+				if (allTables != null && allTables.length > 0)
+				{
+					for each (objTable in allAddedTables)
+					{
+						if ((objTable as Table).TableName == strTableName)
+						{
+							tableDescription=(objTable as Table).Description;
+							break;
+						}
+					}
+				}
+				entityView.addNewEntityByColumns(strTableName, tableDescription, columns);
+			}
+
+			private function onDblClickFieldEntity(event:FieldEvent):void
+			{
+				var col:Column=event.value as Column;
+				var strFieldName:String=col.FieldName;
+				var strFieldDescription:String=col.Description;
+				var strTableName:String=col.TableName;
+				var tableDescription:String=col.TableDescription;
+				
+				addNewColumnForGrid(strFieldName, strFieldDescription, strTableName, tableDescription, _lastColAdd);				
+			}
+			
+			private function getDataField(index:int):String{
+				var isDup:Boolean = false;
+				for(var i:int = 0; i < gridProperties.columnCount; i++){					
+					if((gridProperties.columns[i] as DataGridColumn).dataField == "itemText" + index){
+						isDup = true;						
+						index++;	
+						break;					
+					}
+				}
+				
+				if(isDup){
+					return getDataField(index);
+				}
+				else{
+					return "itemText" + index;
+				}
+			}
+
+			private function addNewColumnForGrid(strFieldName:String, strFieldDescription:String, strTableName:String, strTableDescription:String, index:int,
+			oWhere:Array = null, oOrder:Array = null):void
+			{
+				var src:ArrayCollection=gridProperties.dataProvider as ArrayCollection;
+				var cols:Array=gridProperties.columns;
+				var newCols:Array=new Array();
+				var gridcol:DataGridColumn=new DataGridColumn("");
+				var tmpIndex:int = (index + 10);				
+				var fieldTmp:String = getDataField(tmpIndex);
+				
+				gridcol.dataField=fieldTmp;
+				gridcol.headerText="";
+				gridcol.width=120;
+				gridcol.setStyle("textAlign", "left");
+				gridcol.itemEditor = new ClassFactory(com.controls.dataGrid.ItemRendererCustom);
+				gridcol.editorDataField = "newData";
+				//gridcol.setStyle("backgroundColor", 0xA2A1A1);
+				cols.splice(index - 1, 0, gridcol);
+				
+				_lastColAdd++;
+				
+				gridProperties.columns=cols;
+				
+				if(strFieldDescription.search('_') >= 0){
+					strFieldDescription = strFieldDescription.split('_')[0];
+				}
+				strTableDescription = this.getTableDescription(strTableDescription, this.oArrTable);
+				
+				
+				gridProperties.dataProvider[0][fieldTmp] = strTableDescription;
+				gridProperties.dataProvider[1][fieldTmp] = strFieldDescription;	
+				
+				if(oWhere != null){//Has WHERE clause
+					gridProperties.dataProvider[3][fieldTmp] = oWhere[0]["operator"];
+					gridProperties.dataProvider[4][fieldTmp] = oWhere[0]["value1"];
+					gridProperties.dataProvider[5][fieldTmp] = oWhere[0]["value2"];
+				}
+				
+				if(oOrder != null){//Has ORDER BY clause
+					gridProperties.dataProvider[2][fieldTmp] = oOrder[0]["order"];
+				}				
+	
+				_objColumnSelectedInfo[(strTableDescription + strFieldDescription).replace("\r\n", "")] = "\"" + strTableDescription + "\"." + strFieldName;
+			}
+		
+			private function getTableDescription(tableDesc:String, tables:Array, idx:int = 1):String{				
+				var contain:Boolean = false;
+				var newTableDesc:String = "";
+				if(tables.length != 0){
+					for(var i:int = 0; i < tables.length; i++){
+						if(tableDesc == tables[i]["label"]){
+							contain = true;
+							break;
+						}				
+					}
+					
+					if(!contain){
+						idx = int(tableDesc.split('_')[1]) - 1;					
+						
+						if(idx != 0){
+							newTableDesc = tableDesc.split('_')[0] + "_" + idx;				
+						}	
+						else{
+							newTableDesc = tableDesc.split('_')[0]
+						}
+														
+						return getTableDescription(newTableDesc, tables, idx);
+					}
+					else{
+						return tableDesc;
+					}
+				}
+				else{
+					return tableDesc;
+				}				
+			} 
+			<!--
+			************************************************************************
+			***** FOR DB VIEW GRID
+			************************************************************************
+			-->
+				<!--
+			****************************************************************************************************************************
+			***** Create default columns and 6 rows for Table, Field, Order by, Condition Expression, Condition Value1, Condition Value2 
+			****************************************************************************************************************************
+			-->
+			private function createDefaultTitleColumns():void{
+				var source:Array=new Array();						 
+				var gridcol:DataGridColumn=new DataGridColumn("");
+				
+				gridcol.dataField="";
+				gridcol.headerText="";
+				gridcol.resizable=false;
+				gridcol.editable=false;
+				gridcol.draggable=false;
+												
+				source.push({'': "テーブル"});
+				source.push({'': "フィールド"});				
+				source.push({'': "順序"});
+				source.push({'': "条件式"});
+				source.push({'': "条件値１"});
+				source.push({'': "条件値２"});				
+								
+				gridTitle.dataProvider = source;
+			}
+
+			private function createDefaultColumns():void
+			{	
+				defaultSRC = new ArrayCollection();			
+				var cols:Array=new Array();
+				var gridcol:DataGridColumn;		
+				//add default 10 blank columns into db view grid
+				for (var i:int=0; i < 10; i++)
+				{	
+					gridcol=new DataGridColumn("");
+										
+					gridcol.dataField="itemText" + i;										
+					gridcol.headerText="";
+					gridcol.width=120;
+					gridcol.setStyle("textAlign", "left");
+					gridcol.itemEditor = new ClassFactory(com.controls.dataGrid.ItemRendererCustom);
+					gridcol.editorDataField="newData";							
+					cols.push(gridcol);	
+				}
+				
+				var oArr:Array;				
+				
+				//First loading, no table is loaded
+				oArr = new Array();
+				oArr.push({label: "", data: ""});
+				defaultSRC.addItem(new ItemDataCustom(oArr, ItemDataCustom._ComboBox));
+				
+				//No column is loaded
+				oArr = new Array();
+				oArr.push({label: "", data: ""});
+				defaultSRC.addItem(new ItemDataCustom(oArr, ItemDataCustom._ComboBoxExt));
+				
+				//Load sorted values, no sorted column is selected
+				/*oArr = new Array();
+				oArr.push({label: "", data: ""});
+				oArr.push({label: "昇順", data: "ASC"});
+				oArr.push({label: "降順", data: "DESC"}); 
+				*/defaultSRC.addItem(new ItemDataCustom(orders, ItemDataCustom._ComboBox));
+				
+				//Load default operations expression				
+				/*oArr = new Array();
+				oArr.push({label: "", data: ""});
+				oArr.push({label: "=", data: "="});
+				oArr.push({label: "≠", data: "<>"});
+				oArr.push({label: "<", data: "<"});
+				oArr.push({label: "≤", data: "<="});
+				oArr.push({label: ">", data: ">"});
+				oArr.push({label: "≥", data: ">="});
+				oArr.push({label: "~", data: "BETWEEN"});
+				oArr.push({label: "始まる", data: "LIKEB"});//LIKE from beginning (LIKE 'value%')
+				oArr.push({label: "含む", data: "LIKEA"});//Like all (contains) (LIKE '%value%')
+				*/defaultSRC.addItem(new ItemDataCustom(operators, ItemDataCustom._ComboBox));
+				
+				//Load default condition values
+				defaultSRC.addItem(new ItemDataCustom({label: "", data: ""}, ItemDataCustom._TextInput));
+				defaultSRC.addItem(new ItemDataCustom({label: "", data: ""}, ItemDataCustom._TextInput));
+				
+				//Set columns for DataGrid			
+				gridProperties.columns=cols;
+				//Set dataProvider for DataGrid
+				gridProperties.dataProvider=defaultSRC;
+			}
+
+			private function onItemEditEnd_gridProperties(event:DataGridEvent):void
+			{				
+				//callLater(checkDataOnGrid, new Array(event));				
+			}
+
+			private function checkDataOnGrid(event:DataGridEvent):void
+			{
+				if (event.rowIndex == 0){
+					/** #####  Insert Start 2009/12/08 Yamamoto. ##### */
+					var strColNM:String = event.dataField;
+					var intRow:int = event.rowIndex;
+					if (strColNM != null){
+						/** #  Insert E n d 2009/12/08 Yamamoto. ##### */
+						var strValue:String=StringUtil.trim(gridProperties.dataProvider[intRow][strColNM].toString());
+						if (strValue.length == 0){
+							gridProperties.dataProvider[event.rowIndex][event.dataField]="";
+							gridProperties.dataProvider[1][event.dataField]="";
+							gridProperties.dataProvider[2][event.dataField]="";
+						}
+					}
+				}
+			}
+
+			<!--
+			************************************************************************
+			***** get SQL statement from DB view grid 
+			************************************************************************
+			-->
+			private var strSelectTemplate:String="SELECT {0}\nFROM\n\t{1} "; //WHERE {2} ORDER BY {3}";
+			
+			private var src:ArrayCollection;
+			public function getSQLView():Object //xungnv will come here to modify
+			{
+				var strSql:String="";
+				var strTmp:String="";
+				src = gridProperties.dataProvider as ArrayCollection;
+				var arr0:Array=new Array(); //contain column name
+				var arr1:Array=new Array(); //contain table name
+				var arr2:Array=new Array(); //contain order by
+				var strTableName:String="";
+				var strColumnDescription:String="";
+				var strTableDescription:String="";
+				var strOrderBy:String="";
+				var col:DataGridColumn;
+				var arrTables:Array = new Array();
+				var strWhere:String = "";
+				var arrWhere:Array = new Array();
+				var aSrc:Array = src[0]["itemData"] as Array;
+												
+				for (var i:int=0; i < gridProperties.columnCount; i++)
+				{
+					//Get select column
+					col=gridProperties.columns[i] as DataGridColumn;
+					//src[1] = row of column name
+					//src[0] = row of table name
+					//src[2] = row of order by
+					//src[3] = row of condition expression
+					//src[4] = row of condition value1
+					//src[5] = row of condition value2
+					
+					//Get column decription					
+					if(src[1].hasOwnProperty(col.dataField) && src[1][col.dataField] != null && src[1][col.dataField] != ""){					
+						strColumnDescription = src[1][col.dataField].toString().replace("\r\n", "");
+						if(strColumnDescription == ".*"){							
+							for each(var oCol:Object in aSrc){
+								if(oCol["label"] == src[0][col.dataField]){
+									strColumnDescription = "\"" + oCol["label"] + "\".*";
+									break;		
+								}
+							}
+						}
+					}
+					else if(src[0][col.dataField] != null && src[0][col.dataField] != ""){ 
+						strColumnDescription = ".*";
+						if(strColumnDescription == ".*"){							
+							for each(var oCol1:Object in aSrc){
+								if(oCol1["label"] == src[0][col.dataField]){
+									strColumnDescription = "\"" + oCol1["label"] + "\".*";
+									break;		
+								}
+							}
+						}
+					}
+					else{
+						strColumnDescription = "";
+					}
+					//Get table description
+					if(src[0].hasOwnProperty(col.dataField) && src[0][col.dataField] != null && src[0][col.dataField] != ""){
+						strTableDescription = src[0][col.dataField].toString();
+					}
+					else{
+						strTableDescription = "";
+					}
+					
+					strTmp = strTableDescription + strColumnDescription;
+					
+					//Get OrderBy
+					if (src[2].hasOwnProperty(col.dataField) && src[2][col.dataField] != null 
+					&& src[2][col.dataField] != undefined && src[2][col.dataField] != ""
+					&& src[1][col.dataField] != null  && src[1][col.dataField] != undefined 
+					&& src[1][col.dataField] != ".*" && src[1][col.dataField] != "")
+					{
+						var arrOrder:Array = src[2]["itemData"] as Array;
+						for each(var order:Object in arrOrder){
+							if(order["label"] != "" && order["label"] == src[2][col.dataField]){
+								strOrderBy = order["data"].toString();
+								break;		
+							}
+						}
+					}
+					else
+					{
+						strOrderBy = "";
+					}						
+					//Get Where condition
+					if(src[3].hasOwnProperty(col.dataField) && src[3][col.dataField] != null && src[3][col.dataField] != "" 
+						&& src[4].hasOwnProperty(col.dataField) && src[1][col.dataField] != null && src[1][col.dataField] != "" 
+						&& src[1][col.dataField] != undefined && src[1][col.dataField] != ".*"){
+						
+						var ops:Array = src[3]["itemData"] as Array;
+						var strOp:String = "";						
+						var cond1:String = src[4][col.dataField] == null ? '' : src[4][col.dataField]; 
+						var cond2:String = src[5][col.dataField] == null ? '' : src[5][col.dataField];
+						
+						for each(var op:Object in ops){
+							if(src[3][col.dataField] == op["label"]){
+								strOp = op["data"];								
+								break;
+							}
+						} 	
+						
+						if(strOp == "BETWEEN"){						
+							strWhere =  _objColumnSelectedInfo[strTmp] + " " + 
+										strOp + " " + 
+										cond1 + " AND " +
+										cond2;
+						}
+						else if(strOp == "LIKEB"){
+							strWhere =  _objColumnSelectedInfo[strTmp] + " " + 
+										strOp.substring(0, strOp.length - 1) + " '" + 
+										cond1 + "%'";
+						}
+						else if(strOp == "LIKEA"){
+							strWhere =  _objColumnSelectedInfo[strTmp] + " " + 
+										strOp.substring(0, strOp.length - 1) + " '%" + 
+										cond1 + "%'";
+						}
+						else{
+							strWhere =  _objColumnSelectedInfo[strTmp] + " " + 
+										strOp + " " + 
+										cond1;
+						}
+						
+						if(strOp != "BETWEEN"){
+							if(src[5].hasOwnProperty(col.dataField) && src[5][col.dataField] != null
+							 && src[5][col.dataField] != undefined  && src[5][col.dataField] != ""){								
+								if(strOp == "LIKEA"){
+									strOp = strOp.substring(0, strOp.length - 1);
+									strWhere += " OR\n\t" + 
+										_objColumnSelectedInfo[strTmp] + " " + 
+										strOp + " '" + 
+										cond2 + "%'";
+								}
+								else if(strOp == "LIKEB"){
+									strOp = strOp.substring(0, strOp.length - 1);
+									strWhere += " OR\n\t" + 
+										_objColumnSelectedInfo[strTmp] + " " + 
+										strOp + " '%" + 
+										cond2 + "%'";
+								}
+								else{
+									strWhere += " OR\n\t" + 
+										_objColumnSelectedInfo[strTmp] + " " + 
+										strOp + " " + 
+										cond2;
+								}
+							}						
+						}
+						
+						if(strWhere != ""){
+							arrWhere.push(strWhere);
+						}
+					}
+						
+					if(src[0].hasOwnProperty(col.dataField) && src[1][col.dataField] != null && src[1][col.dataField] != ""){												
+						if (strTmp.length > 0 || strColumnDescription.indexOf(".*") > -1){
+							var t:String = "";//Table name
+							var c:String = "";//Column name
+							if(strColumnDescription.indexOf(".*") < 0){
+								if(_objColumnSelectedInfo.hasOwnProperty(strTmp)){
+									arr0.push(_objColumnSelectedInfo[strTmp] + " AS \"" + strColumnDescription + "\"");
+								}
+								else{
+									var found:Boolean = false;
+									for each(var oT:Object in aSrc){
+										if(oT["label"] == src[0][col.dataField]){
+											t = "\"" + oT["label"] + "\"";
+											break;
+										} 
+									}
+									
+									for(var k:int = 0; k < gridProperties.columnCount; k++){
+										var aSrcC:Array = src[1]["itemData" + k] as Array;
+										for each(var oC:Object in aSrcC){
+											if(oC["label"] == src[1][col.dataField]){
+												c = oC["data"].toString();
+												found = true;
+												break;
+											}
+										}
+										
+										if(found){
+											break;
+										}
+									}
+									
+									if(arrWhere[i] != null && arrWhere[i].toString().search("undefined") >= 0){
+										arrWhere[i] = arrWhere[i].toString().replace("undefined", t + "." + c);
+									}
+									
+									arr0.push(t + "." + c + " AS \"" + strColumnDescription + "\"");
+								}
+							}
+							else{
+								arr0.push(strColumnDescription);
+							}
+							
+							for each(var oTbl:Object in aSrc){
+								if(oTbl["label"] == src[0][col.dataField]){
+									strTableName = oTbl["data"].toString() + " \"" + oTbl["label"] + "\"";
+									break;		
+								}
+							}
+							
+							if(arrTables.indexOf(strTableName) < 0){
+								arrTables.push(strTableName);
+							}
+							if (strOrderBy != "")
+							{
+								if(_objColumnSelectedInfo[strTmp] == undefined){
+									arr2.push(t + "." + c + " " + strOrderBy);
+								}
+								else{
+									arr2.push(_objColumnSelectedInfo[strTmp] + " " + strOrderBy);
+								}
+							}
+						}	
+					}
+					for each(var ep:EntityPanel in this.entityView.entityPanels){								
+						var ePanel:EntityPanel = ep;
+						if (arr1.indexOf(ePanel.tableName + "\"" + ePanel.table.Description + "\"~" +  ePanel.x + 
+													":" + 
+													  ePanel.y +
+													"$" +
+													  ePanel.width +
+													":" +
+													  ePanel.height) < 0)
+						{
+							arr1.push
+							(
+								ePanel.tableName + "\"" + ePanel.table.Description + "\"~" +  ePanel.x + 
+													":" + 
+													  ePanel.y +
+													"$" +
+													  ePanel.width +
+													":" +
+													  ePanel.height
+						    );							
+						}					
+					}
+				}
+
+				strTmp="";
+				var count:int = 0;
+				for each (var str:String in arr0)
+				{
+					var newColDesc:String = "";
+					if(str.indexOf(".*") < 0){
+						newColDesc = getColumnDescription
+							(
+								replaceStringData(formatStringData(str.split("AS")[1]), '"', ""), 
+								arr0, 
+								0
+							);
+					}else{
+						newColDesc = str;						
+					}
+					
+					if(str.indexOf(".*") < 0){
+						arr0[count] = str.split("AS")[0] + " AS \"" + newColDesc + "\"";
+					}
+					else{
+						arr0[count] = str;
+					}
+					
+					count++;	
+				}
+				
+				for(var z:int = 0; z < arr0.length; z++){
+					if(arr0[z].toString().indexOf("_0") >= 0){
+						arr0[z] = arr0[z].toString().split("_0")[0] + "\"";
+					}
+				}
+				
+				for each(var str1:String in arr0){					
+					if(str1.indexOf(".*") >= 0){						
+						for each(var tbls:String in arr1){
+							var desc:String = replaceStringData(str1.split('.')[0], '"','');
+							if(tbls.indexOf(desc) >= 0){
+								var colsDesc:Array = GlobalShare.getColumns(tbls.split('"')[0]) as Array;
+								for each(var objCol:Object in colsDesc){
+									strTmp += "\n\t\"" + desc + "\"." + objCol["FieldName"] + " AS \"" + objCol["Description"] + "\",";			
+								}		
+							}
+						}						
+					}				
+					else{
+						strTmp += "\n\t" + str1 + ",";
+					}										
+				}
+				
+				if(!arr0.length == 0)
+					strSql=strSelectTemplate.replace("{0}", strTmp.substr(0, strTmp.length - 1));
+
+				var arrRelation:Array=new Array();				
+				var arrTmp:Array = this.entityView.relationManager.relationships;
+				
+				if (arrTmp != null && arrTmp.length > 0)
+				{
+					for (var j:int=0; j < arrTmp.length; j++)
+					{
+						var relation:IRelationRenderer=arrTmp[j];
+						var obj:Object=new Object;
+						obj["primaryTableName"]=relation.entitypoint1.entity.entityPanel.tableName; 
+						obj["primaryTableDesc"]=relation.entitypoint1.entity.entityPanel.table.Description;
+						obj["primaryTableColumn"]=relation.entitypoint1.columnName;
+						obj["foreignTableName"]=relation.entitypoint2.entity.entityPanel.tableName;
+						obj["foreignTableDesc"]=relation.entitypoint2.entity.entityPanel.table.Description;
+						obj["foreignTableColumn"]=relation.entitypoint2.columnName;
+						obj["joinOperator"] = relation.entitypoint1.joinOperator;
+						arrRelation.push(obj);
+					}
+				}
+
+				strTmp=getStrSQLAfterFrom(arrTables, arrRelation);
+				strSql=strSql.replace("{1}", strTmp);
+				strOrderBy="";				
+				
+				if(arrWhere.length > 0){
+					strSql += "\nWHERE";
+					if(arrWhere.length > 1){
+						for each(var tmpStr:String in arrWhere){
+							strSql += "\n\t(" + tmpStr + ") AND";
+						}
+						strSql = strSql.substring(0, strSql.length - 3);
+					}
+					else{
+						strSql += "\n\t" + arrWhere[0];
+					}
+				}
+				
+				if (arr2.length > 0)
+				{					
+					for (i=0; i < arr2.length; i++)
+					{
+						if (strOrderBy == "")
+						{
+							strOrderBy+="\nORDER BY";
+						}
+						strOrderBy += "\n\t" + arr2[i].toString() + ",";
+					}
+					strSql+=strOrderBy.substr(0, strOrderBy.length - 1);
+				}
+
+				var objAgrs:Object=new Object();
+				objAgrs["sql"]=strSql;
+				objAgrs["columns"]=arr0;
+				//Begin xungnv added
+				var table:String = "";
+				for each(var s:String in arr1){
+					table += s + ";";
+				}
+				objAgrs["relations"] = arrRelation;
+				objAgrs["tables"] = table.substring(0, table.length - 1);
+				
+				//End xungnv added
+				return objAgrs;
+			}
+			
+			private function getColumnDescription(columnDesc:String, tables:Array, idx:int = 0):String{				
+				var isDup:Boolean = false;
+				var newColDesc:String = "";
+				
+				for(var i:int = 0; i < tables.length; i++){
+					if(columnDesc.indexOf(".*") < 0 && tables[i].toString().indexOf(".*") < 0){						
+						if(replaceStringData(formatStringData(tables[i].toString().split("AS")[1]), '"', "") == columnDesc){
+							isDup = true;				
+							
+							if(columnDesc.indexOf("_") < 0){
+								newColDesc = columnDesc + "_" + idx.toString();
+							}
+							else{
+								newColDesc = columnDesc.split("_")[0] + "_" + idx.toString();
+							}
+							
+							idx++;
+						}
+					}
+					if(isDup){
+						break;
+					}
+				}
+				
+				if(isDup){					
+					return getColumnDescription(newColDesc, tables, idx);
+				}
+				else{
+					return columnDesc;
+				}
+			} 
+
+			private function getStrSQLAfterFrom(arrTable_Selected:Array, arrRelation:Array):String
+			{
+				var strReturn:String="";
+				var strPrimaryTableName:String;
+				var strForeignKeyTable:String;
+				var strOnCondition:String;
+				var i:Number;
+				var iRelationNumberIsUsed:Number=0;
+				var iCount:Number=0;
+				var arrRelationWithOnCondition:Array;
+				var arrUsedTable:Array=new Array();
+				var tmparrTable_Selected:Array = new Array();
+				
+				if (arrTable_Selected.length == 1)
+				{
+					return arrTable_Selected[0];
+				}
+				else{
+					for each(var s:String in arrTable_Selected){
+						tmparrTable_Selected.push(s);
+					}
+				}
+				arrRelationWithOnCondition=createTableRelationWithOnCondition(arrRelation);
+				for (i=0; i < arrRelationWithOnCondition.length; i++)
+				{
+					strPrimaryTableName=arrRelationWithOnCondition[i]["primaryTableDesc"].toString();
+					strForeignKeyTable=arrRelationWithOnCondition[i]["foreignTableDesc"].toString();
+					strOnCondition=arrRelationWithOnCondition[i]["onCondition"].toString();
+					
+					if (strReturn == "")
+					{
+						strReturn= arrRelation[i]["primaryTableName"] + " \"" + strPrimaryTableName + "\" " + 
+									arrRelation[i]["joinOperator"] + " " + 
+									arrRelation[i]["foreignTableName"] + " \"" + strForeignKeyTable + "\"" + 
+									strOnCondition;
+						arrUsedTable.push(arrRelation[i]["primaryTableName"] + " \"" + strPrimaryTableName + "\"");
+						arrUsedTable.push(arrRelation[i]["foreignTableName"] + " \"" + strForeignKeyTable + "\"");
+						iCount++;
+							//break;	
+					}
+					else
+					{
+						if (checkUsedTable(arrUsedTable, arrRelation[i]["primaryTableName"] + " \"" + strPrimaryTableName + "\"") == true)
+						{
+							if (checkUsedTable(arrUsedTable, arrRelation[i]["foreignTableName"] + " \"" + strForeignKeyTable + "\"") == false)
+							{
+								strReturn="(" + strReturn + ") " + arrRelation[i]["joinOperator"] + " " + arrRelation[i]["foreignTableName"] + " \"" + 
+								strForeignKeyTable + "\"" + strOnCondition;
+								arrUsedTable.push(arrRelation[i]["foreignTableName"] + " \"" + strForeignKeyTable + "\"");
+								iCount++;
+									// break;
+							}
+						}
+						else
+						{
+							if (checkUsedTable(arrUsedTable, arrRelation[i]["foreignTableName"] + " \"" + strForeignKeyTable + "\"") == true)
+							{
+								strReturn="(" + strReturn + ") " + arrRelation[i]["joinOperator"] + " " + arrRelation[i]["primaryTableName"] + " \"" + 
+								strPrimaryTableName + "\"" + strOnCondition;
+								arrUsedTable.push(arrRelation[i]["primaryTableName"] + " \"" + strPrimaryTableName + "\"");
+								iCount++;
+									// break;
+							}
+						}
+					}					
+				}
+				for (i=0; i < arrTable_Selected.length; i++) //add table have no realation
+				{
+					//xungnv edited from split
+					if (arrUsedTable.indexOf(arrTable_Selected[i].toString().split('~')[0]) < 0)
+					{
+						if (strReturn != "")
+						{
+							strReturn+=",\n\t";
+						}
+						strReturn+=arrTable_Selected[i];	
+					}
+				}
+				return strReturn;
+			}
+
+			private function createTableRelationWithOnCondition(arrRelation:Array):Array
+			{
+				var arrTableRelationWithOnCondition:Array=new Array();
+				var i:Number;
+				var j:Number;
+				//create new arrTableRelation with primaryTableName column and foreignKeyTable column
+				for (i=0; i < arrRelation.length; i++)
+				{
+					for (j=0; j < arrTableRelationWithOnCondition.length; j++)
+					{
+						if (arrRelation[i]["primaryTableName"] == arrTableRelationWithOnCondition[j]["primaryTableName"] && 
+						arrRelation[i]["foreignTableName"] == arrTableRelationWithOnCondition[j]["foreignTableName"] &&
+						arrRelation[i]["primaryTableDesc"] == arrTableRelationWithOnCondition[j]["primaryTableDesc"] &&
+						arrRelation[i]["foreignTableDesc"] == arrTableRelationWithOnCondition[j]["foreignTableDesc"])
+						{
+							break;
+						}
+					}
+					if (j >= arrTableRelationWithOnCondition.length)
+					{
+						var obj:Object=new Object();
+						obj["primaryTableDesc"]=arrRelation[i]["primaryTableDesc"];
+						obj["foreignTableDesc"]=arrRelation[i]["foreignTableDesc"];
+						obj["primaryTableName"]=arrRelation[i]["primaryTableName"];
+						obj["foreignTableName"]=arrRelation[i]["foreignTableName"];
+						arrTableRelationWithOnCondition.push(obj);
+					}
+				}
+
+				//apend OnCondition
+				var strOnCondition:String;
+				for (i=0; i < arrTableRelationWithOnCondition.length; i++)
+				{
+					strOnCondition="";
+					for (j=0; j < arrRelation.length; j++)
+					{
+						if ((arrTableRelationWithOnCondition[i]["primaryTableName"] == arrRelation[j]["primaryTableName"] && 
+							 arrTableRelationWithOnCondition[i]["primaryTableDesc"] == arrRelation[j]["primaryTableDesc"] && 
+							 arrTableRelationWithOnCondition[i]["foreignTableName"] == arrRelation[j]["foreignTableName"] && 
+							 arrTableRelationWithOnCondition[i]["foreignTableDesc"] == arrRelation[j]["foreignTableDesc"]) || 
+							 (arrTableRelationWithOnCondition[i]["primaryTableName"] == arrRelation[j]["foreignTableName"] && 
+							 arrTableRelationWithOnCondition[i]["primaryTableDesc"] == arrRelation[j]["foreignTableDesc"] && 
+							 arrTableRelationWithOnCondition[i]["foreignTableName"] == arrRelation[j]["primaryTableName"] && 
+							 arrTableRelationWithOnCondition[i]["foreignTableDesc"] == arrRelation[j]["primaryTableDesc"]))
+						{
+							if (strOnCondition == "")
+							{
+								strOnCondition+=" ON\n\t";
+							}
+							else
+							{
+								strOnCondition+=" AND\n\t";
+							}
+							strOnCondition+="\"" + arrRelation[j]["primaryTableDesc"].toString() + "\"." + arrRelation[j]["primaryTableColumn"].toString() + " = \"" + 
+							arrRelation[j]["foreignTableDesc"].toString() + "\"." + arrRelation[j]["foreignTableColumn"].toString();
+							arrTableRelationWithOnCondition[i]["onCondition"]=strOnCondition;
+						}
+					}
+				}
+				return arrTableRelationWithOnCondition;
+			}
+
+			private function checkUsedTable(arrUsedTable:Array, strTable:String):Boolean
+			{
+				var i:Number;
+				for (i=0; i < arrUsedTable.length; i++)
+				{
+					if (arrUsedTable[i].toString() == strTable)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			public function deleteSelectedField():void
+			{
+				if (_myIndex >= 0)
+				{
+					var src:ArrayCollection=gridProperties.dataProvider as ArrayCollection;
+					var cols:Array=gridProperties.columns;
+					cols.splice(_myIndex, 1);
+					gridProperties.columns=cols;
+					gridProperties.dataProvider=src;
+					if (_lastColAdd > 1)
+					{
+						_lastColAdd--;
+					}
+				}
+			}
+
+			public function deleteFieldOfTable(strTable:String):void
+			{
+				var src:ArrayCollection=gridProperties.dataProvider as ArrayCollection;
+				var cols:Array=gridProperties.columns;
+				var i:int=0;
+				var j:int=0;
+				var gridColumn:DataGridColumn;
+				for (i=cols.length - 1; i >= 0; i--)
+				{
+					gridColumn=cols[i] as DataGridColumn;
+					if (gridColumn.dataField != null && src[0].hasOwnProperty(gridColumn.dataField) == true && src[0][gridColumn.dataField] == strTable)
+					{
+						cols.splice(i, 1);
+						if (_lastColAdd > 1)
+						{
+							_lastColAdd--;
+						}
+					}
+				}
+
+				gridProperties.columns=cols;
+			}
+
+			public function deleteSelectedTable():void
+			{
+				if (entityView.activeEntityPanel != null)
+				{	
+					//Delete table in comboBox
+					var o:Object = new Object();
+					o["label"] = entityView.activeEntityPanel.table.Description;
+					o["data"] = entityView.activeEntityPanel.table.TableName;
+					var idx:int = -1;
+					for (var i:int = 0; i < oArrTable.length; i++){
+						if(oArrTable[i]["data"] == o["data"] && oArrTable[i]["label"] == o["label"]){
+							idx = i;
+							break;
+						}
+					}
+					if(idx != -1){
+						oArrTable.splice(idx, 1);
+						entityView.arrTablesAdded.splice(idx, 1);
+					}
+					deleteFieldOfTable(entityView.activeEntityPanel.table.Description);
+					entityView.removeActiveEntityPanel();		
+				}
+			}
+
+			private function itemGridIsClicked(event:ListEvent):void
+			{
+				_myIndex=event.columnIndex;
+			}
+
+			private function gridProperties_Change(event:ListEvent):void
+			{
+				//var bCheckEnable:Boolean=checkEnableColumn();
+				//this.parent["setEnabledReadData"](bCheckEnable);			
+			}
+
+			private function checkEnableColumn():Boolean
+			{
+				var src:ArrayCollection=gridProperties.dataProvider as ArrayCollection;
+				if (src == null)
+				{
+					return false
+				}
+				var i:int;
+				var col:DataGridColumn;
+				for (i=0; i < gridProperties.columnCount; i++)
+				{
+					col=gridProperties.columns[i] as DataGridColumn;
+					if (src[0][col.dataField] != null && src[0][col.dataField].toString() != "")
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			private function onGridMouseUp(event:MouseEvent):void
+			{
+				//process after dragdrop
+				var itemRenderer:DataGridItemRenderer=event.target as DataGridItemRenderer;
+				if (itemRenderer != null)
+				{
+					var gridColumn:DataGridColumn=getGridColumnByMousePosition(event.stageX);
+					if (gridColumn != null)
+					{
+						var _myIndexDragDrop:int=gridProperties.columns.indexOf(gridColumn);
+						if (_myIndexDragDrop > 0 && isDrag)
+						{
+							var strFirstColumnName:String=EntityControl._firstColumnName;
+							var strFirstTableName:String=EntityControl._firstTableName;
+							var strFirstColumnDescription:String=EntityControl._firstColumnDescription;
+							var strFirstTableDescription:String=EntityControl._firstTableDescription;
+							if (strFirstColumnName != null && strFirstColumnName != "")
+							{
+								addNewColumnForGrid(strFirstColumnName, strFirstColumnDescription, strFirstTableName, strFirstTableDescription, _myIndexDragDrop);
+								EntityControl._firstColumnName="";
+								EntityControl._firstTableName="";
+								EntityControl._firstColumnDescription="";
+								EntityControl._firstTableDescription="";
+							}
+							isDrag = false;
+						}
+					}
+				}
+			}
+
+			private function onGridMouseMove(event:MouseEvent):void
+			{
+				var itemRenderer:DataGridItemRenderer=event.target as DataGridItemRenderer;
+				if (itemRenderer != null)
+				{
+					var gridColumn:DataGridColumn=itemRenderer.data as DataGridColumn;
+					if (gridColumn != null)
+					{
+						var _myIndexDragDrop:int=gridProperties.columns.indexOf(gridColumn);
+
+					}
+				}
+			}
+
+			private function onGridMouseOut(event:MouseEvent):void
+			{
+				EntityControl._firstColumnName="";
+				EntityControl._firstTableName="";
+				EntityControl._firstColumnDescription="";
+				EntityControl._firstTableDescription="";
+			}
+
+			private function onDragEnter(event:DragEvent):void
+			{
+				isDrag = true;
+				var dragInitiator:DataGrid=DataGrid(event.currentTarget);
+				DragManager.acceptDragDrop(dragInitiator);
+				DragManager.showFeedback(DragManager.LINK);
+			}
+
+			private function onDragDrop(event:DragEvent):void
+			{
+
+			}
+
+			private function onDragExit(event:DragEvent):void
+			{
+
+			}
+
+			public function resetEntityDesign():void
+			{
+				var i:int;
+				for (i=0; i < entityView.entityPanels.length; i++)
+				{
+					var objEntityPanel:EntityPanel=entityView.entityPanels[i] as EntityPanel;
+					deleteFieldOfTable(objEntityPanel.table.Description);
+				}				
+				entityView.resetEntityLayout();	
+				this.oArrTable = null;
+				this.oArrTable = new Array();
+				this._myIndex = 0;
+				this.createDefaultColumns();
+				cursorManager.removeBusyCursor();
+			}
+
+			private function formatStringData(strSource:String):String
+			{
+				while (strSource.indexOf(" ") >= 0)
+				{
+					strSource=strSource.replace(" ", "");
+				}
+				return strSource;
+			}
+
+			private function replaceStringData(strSource:String, strOldValue:String, strNewValue:String):String
+			{
+				while (strSource.indexOf(strOldValue) >= 0)
+				{
+					strSource=strSource.replace(strOldValue, strNewValue);
+				}
+				return strSource;
+			}
+						
+			public function loadView(objView:Object):void
+			{
+				cursorManager.setBusyCursor();
+				this.joinOp = new Array();
+				var i:int=0;
+				var strTables:String="";
+				_isLoadView = true;
+				var arrDef:Array;				
+				arrWhere = null;
+				arrOrder = null;
+				//get tablename,relations,columns from query===================
+				//var strQuery:String="SELECT c09_facultynm.create_date, c09_facultynm.create_term, c09_facultynm.create_user FROM c09_facultynm JOIN c10_faculty ON c09_facultynm.create_date = c10_faculty.create_date LEFT JOIN c16_course ON c09_facultynm.create_date = c16_course.create_date";
+				var strQuery:String=objView["definition"].toString();
+				
+				//Gets WHERE and ORDER BY Clauses
+				arrDef = strQuery.split("WHERE");
+				if(arrDef != null && arrDef.length > 1){
+					arrDef = arrDef[1].toString().replace("ORDER BY", ";").split(";");
+				}
+				
+				if(arrDef != null && arrDef.length > 1){					
+					arrWhere = replaceStringData(replaceStringData(arrDef[0].toString(), "OR", ";"), "AND", ";").split(";");
+					
+					if(arrDef.length > 1){
+						arrOrder = replaceStringData(arrDef[1].toString(), ",", ";").split(";");
+					}
+				}
+				
+				//Formats WHERE and ORDER BY Clauses
+				if(arrWhere != null && arrWhere.length > 0){
+					for (var iW:int = 0; iW < arrWhere.length; iW++){
+						arrWhere[iW] = 
+							formatStringData
+							(
+								replaceStringData
+								(
+									replaceStringData
+									(
+										replaceStringData(arrWhere[iW].toString(), "(", ""),								 
+										")", 
+										""
+									),
+									"::text",
+									""
+								)
+							);
+					}
+				}
+				
+				//Identify BETWEEN Clause
+				var tmpW:Array = new Array();
+				var hasCount:int = 0;
+				var hasPlus:Boolean = false;	
+				if(arrWhere != null && arrWhere.length > 0){
+					for(var x:int = 0; x < arrWhere.length; x++){
+						var hasBW:Boolean = false;
+						
+						if(hasCount == 1){
+							if(hasPlus){
+								hasCount++;
+								hasPlus = false;
+							}
+							x = x + hasCount;
+							hasCount = 0;
+						}
+											
+						if(x <= arrWhere.length - 1){
+							if(arrWhere.length > 1){
+								if(arrWhere[x].toString().search(">=") >= 0 && 
+									(x + 1) < arrWhere.length &&
+									arrWhere[x + 1].toString().search("<=") >= 0 &&
+									arrWhere[x].toString().split(">=")[0] == 
+									arrWhere[x+1].toString().split("<=")[0]){
+										
+									tmpW.push(arrWhere[x] + " AND " + arrWhere[x+1]);
+									hasBW = true;
+									hasCount = 1;
+								}
+							}
+							
+							if(!hasBW){
+								tmpW.push(arrWhere[x]);
+							}
+							else{								
+								if(x + 2 <= arrWhere.length - 1){
+									hasPlus = true;
+									tmpW.push(arrWhere[x + 2]);
+								}
+							}						
+						}
+					}
+				}
+				
+				//Reset array of WHERE clause				
+				arrWhere = tmpW;
+				
+				if(arrOrder != null && arrOrder.length > 0){
+					for (var iO:int = 0; iO < arrOrder.length; iO++){
+						arrOrder[iO] = 
+							formatStringData
+							(
+								arrOrder[iO]
+							);
+					}
+				}
+				
+				strQuery=strQuery.replace(" Order By ", ";").replace(" order by ", ";").replace(" ORDER BY ", ";");
+				var arrTmp:Array=strQuery.split(';');
+				if (arrTmp.length > 0)
+				{
+					strQuery=arrTmp[0];
+				}
+				strQuery=strQuery.replace(" FROM ", ";").replace(" from ", ";").replace(" From ", ";")
+				strQuery=strQuery.replace(" WHERE ", ";").replace(" where ", ";").replace(" Where ", ";")
+				arrTmp=strQuery.split(';');
+				var arrTableNames:Array=new Array();
+				var arrRelations:Array=new Array();
+				if (arrTmp.length > 1)
+				{
+					_strColumnView=arrTmp[0];
+					_strColumnView=_strColumnView.replace("SELECT ", "").replace("select ", "").replace("Select ", "");
+					//_strColumnView=formatStringData(_strColumnView);
+					_strColumnView=replaceStringData(_strColumnView, ",", ";")
+					
+					var strTmp:String=arrTmp[1];					
+					var tmpOp:String = strTmp;
+					while(tmpOp.indexOf("JOIN") >= 0){
+						if(tmpOp.search(JoinOperator.LEFT_JOIN) >= 0){
+							this.joinOp.push(JoinOperator.LEFT_JOIN);
+						}
+						if(tmpOp.search(JoinOperator.RIGHT_JOIN) >= 0){					
+							this.joinOp.push(JoinOperator.RIGHT_JOIN);
+						}
+						if(tmpOp.search(JoinOperator.LEFT_JOIN) < 0 && strTmp.search(JoinOperator.RIGHT_JOIN) < 0 && strTmp.search(JoinOperator.JOIN) >= 0){
+							this.joinOp.push(JoinOperator.INNER_JOIN);
+						}
+						tmpOp = tmpOp.replace("JOIN", "");
+					}
+					
+					strTmp=replaceStringData(strTmp, "(", "");
+					strTmp=replaceStringData(strTmp, ")", "");
+					strTmp=replaceStringData(strTmp, "::text", "");
+					strTmp=replaceStringData(replaceStringData(replaceStringData(strTmp, " INNER JOIN ", ";"), " Inner Join ", ";"), " inner join ", ";");
+					strTmp=replaceStringData(replaceStringData(replaceStringData(strTmp, " LEFT JOIN ", ";"), " Left Join ", ";"), " left join ", ";");
+					strTmp=replaceStringData(replaceStringData(replaceStringData(strTmp, " RIGHT JOIN ", ";"), " Right Join ", ";"), " right join ", ";");
+					strTmp=replaceStringData(replaceStringData(replaceStringData(strTmp, " JOIN ", ";"), " Join ", ";"), " join ", ";");
+					strTmp=replaceStringData(replaceStringData(replaceStringData(strTmp, " ON ", ";"), " On ", ";"), " on ", ";");
+					
+					arrTmp=strTmp.split(";")
+					for (i=0; i < arrTmp.length; i++)
+					{
+						if (arrTmp[i].toString().search("=") >= 0) //relation
+						{
+							arrRelations.push(arrTmp[i].toString().replace(" = ", ":").replace("=", ":"));
+						}
+						else //table
+						{
+							var j:int;
+							for (j=0; j < arrTableNames.length; j++)
+							{
+								if (arrTableNames[j].toString() == arrTmp[i].toString())
+								{
+									break;
+								}
+							}
+							if (j >= arrTableNames.length)
+							{
+								arrTableNames.push(arrTmp[i].toString());
+							}
+						}
+					}
+					for (i=0; i < arrTableNames.length; i++)
+					{
+						strTables+=arrTableNames[i].toString() + ";";
+					}
+					if (strTables != "")
+					{
+						strTables=strTables.substring(0, strTables.length - 1);
+					}
+					strTables=formatStringData(strTables);
+
+					_strRelationView="";
+					for (i=0; i < arrRelations.length; i++)
+					{
+						_strRelationView+=arrRelations[i].toString() + ";";
+					}
+					if (_strRelationView != "")
+					{
+						_strRelationView=_strRelationView.substring(0, _strRelationView.length - 1);
+					}
+					_strRelationView=formatStringData(_strRelationView);
+				}
+				//=============================================================
+
+				
+				//Load Table View ===============================================
+				if (strTables != "")
+				{
+					var objArgs:Object=new Object();
+					var tablesArgs:String="";
+					var arrTmpTbl:Array = strTables.split(";");
+					for each(var oTbl:String in arrTmpTbl){
+						tablesArgs += oTbl.split('"')[0] + ","; 
+					}
+					
+					tablesArgs = tablesArgs.substring(0, tablesArgs.length - 1);
+					
+					objArgs["tablename"] = replaceStringData(strTables, ";", ",");
+					objArgs["a02_viewname"] = objView["viewname"]; 
+					this._strViewName = objView["viewname"];
+					this.HKC31400J.readTable_Columns2(new Array(objArgs));
+				}
+				//==============================================================
+			}
+
+			public function _onResult_readTable_Columns2(event:ResultEvent):void//xungnv will come here to edit
+			{
+				var expData:Array=event.result as Array;
+				var tbl:Table;
+				var col:Column;
+				var arrCol:Array=new Array();
+				var strTablename:String="";
+				var arrTables:Array;
+				var tables:String;
+				var objTableColum:Object = expData[3][1];
+				//var arrTableNotSelected:Object = expData[2] as Array;
+				
+				if(expData.length > 2){
+					var temp:Array = expData[2] as Array;
+					if(temp.length > 1){
+						arrTables =  expData[2][1] as Array;
+						tables  = arrTables[0]["a02_tables"].toString();
+					}
+				}
+				switch (expData[0][0]["status"])
+				{
+					case "existdata":
+						dic = new Dictionary();
+						_arrTable_Coumns=expData[1] as Array;
+						
+						var oTable:Array;
+						var cols:Array = new Array();	
+						if(tables != null)
+							 oTable = tables.split(';');
+							 
+						for each (var obj:Object in _arrTable_Coumns) //obj is Column
+						{
+							strTablename=obj["tablename"].toString();
+							if (dic[strTablename] == undefined)
+							{
+								var tableDescription:String="";
+								var objTable:Object
+								if (allTables != null && allTables.length > 0)
+								{
+									for each (objTable in allTables)
+									{
+										if (objTable["tablename"] == strTablename)
+										{
+											tableDescription=objTable["description"];
+											break;
+										}
+									}
+								}
+								for each(var s1:String in oTable){								
+									if(s1.search(strTablename) > -1){
+										tbl=new Table(s1, tableDescription);
+										dic[strTablename]=tbl;
+										break;
+									}
+								}
+							}
+							else
+							{
+								tbl=dic[strTablename];
+							}
+							col=new Column(strTablename, obj["fieldname"].toString(), obj["description"].toString());
+							
+							if(tbl != null){
+								tbl.Columns.push(col);
+							}						
+						}
+						
+						var isInSelectedCols:Boolean = false;						
+						var tName:String;
+						
+						for each(var s:String in oTable){								
+							for each(var obj2:Table in dic){
+								//tName = obj2.Description;
+								if(obj2.TableName.search(s.split('"')[0].toString()) > -1){
+									obj2.TableName = s;
+									addNewEntity(obj2, true, _isLoadView);
+									isInSelectedCols = true;
+									break;
+								}
+							}
+							if(!isInSelectedCols)
+							{	
+								var dCol:Column;
+								for each(var t:Object in objTableColum){
+									if(s.search(t["tablename"].toString()) > -1){										
+										dCol = new Column
+										(
+											t["tablename"].toString(),
+											t["fieldname"].toString(),
+											t["description"].toString(),
+											"varchar",
+											100
+										);
+										cols.push(dCol);
+										for each(var cName:Object in allTables){
+											if(t["tablename"].toString() == cName["tablename"].toString()){
+												tName = cName["description"].toString();
+												break;
+											}
+										}										
+									}
+								}										
+								addNewEntity(new Table(s, tName, cols), true, _isLoadView);								
+							}	
+							isInSelectedCols = false;
+						}
+						
+						loadRelationView();
+						loadColumnView();					
+						
+						break;
+					case "nodata":
+						break;
+					case "error":
+						break;
+				}
+				cursorManager.removeBusyCursor();
+			}	
+
+			private function loadRelationView():void
+			{
+				if (_strRelationView != "")//vo day sua
+				{
+					var arrRelation:Array=_strRelationView.split(";");
+					var i:int;
+					for (i=0; i < arrRelation.length; i++)
+					{
+						var arrCol:Array=arrRelation[i].toString().split(":");
+						if (arrCol.length == 2)
+						{
+							var arrStart:Array=arrCol[0].toString().split(".");
+							var arrEnd:Array=arrCol[1].toString().split(".");
+							if (arrStart.length == 2 && arrEnd.length == 2)
+								entityView.createRealation(arrStart[0].toString(), arrStart[1].toString(), arrEnd[0].toString(), arrEnd[1].toString(), joinOp[i]);
+						}
+					}
+				}
+			}
+
+			private function loadColumnView():void
+			{
+				if (_strColumnView != "")
+				{
+					var arrColumn:Array=_strColumnView.split(";");
+					var i:int;
+					var strTableDescription:String;
+					var strColumnDescription:String;
+					var newOp:Array = 
+					[
+						{label: "≦", data: "<="},
+						{label: "≧", data: ">="},
+						{label: "＝", data: "="},
+						{label: "≠", data: "<>"},
+						{label: "＜", data: "<"},						
+						{label: "＞", data: ">"},						
+						{label: "～", data: "BETWEEN"},
+						{label: "始まる", data: "LIKEB"},
+						{label: "含む", data: "LIKEA"}
+					];
+					
+					for (i=0; i < arrColumn.length; i++)
+					{
+						var arrCol:Array=arrColumn[i].toString().split(".");
+						if (arrCol.length == 2)
+						{
+							//get table description,column description
+							strTableDescription=replaceStringData(formatStringData(arrCol[0].toString()), '"', '');
+							if(arrCol[1].toString().indexOf("AS") >= 0){
+								strColumnDescription=replaceStringData(formatStringData(arrCol[1].toString().split("AS")[1].toString()), '"', "");
+							}
+							else{
+								strColumnDescription=arrCol[1].toString();
+							}
+							
+							var arrW:Array = null;
+							var arrO:Array = null;
+							var bFound:Boolean = false;	
+							var foundCount:int = 0;
+							var value1:String = null;
+							var value2:String = null;
+							var operator:String = null;
+							var order:String = null;	
+							var hasBW:Boolean = false;					
+							
+							if(arrWhere != null){
+								for each(var oW:String in arrWhere){
+									if(foundCount == 0){
+										operator = null;
+										value1 = null;
+										value2 = null;
+									}
+									hasBW = false;
+									if(oW.split(".")[0] == formatStringData(arrCol[0])){
+										
+										var colInW:String;//voday
+										
+										
+										for each(var opt:Object in newOp){//Compare and normal operators
+											if(oW.search(opt["data"]) >= 0){ 
+												colInW = formatStringData(oW.split(".")[1].toString().split(opt["data"])[0]);
+												break;
+											}
+										}
+										
+										if(oW.search("~~") >= 0){//BETWEEN operator
+											colInW = formatStringData(oW.split(".")[1].toString().split("~~")[0]);
+										}									
+										else if(oW.search("LIKE") >= 0){//LIKE operators
+											colInW = formatStringData(oW.split(".")[1].toString().split("LIKE")[0]);
+										}
+										
+										if(oW.search(">=") >= 0 && oW.search("<=") >= 0 &&
+											colInW.split(">")[0] == formatStringData(arrCol[1].toString().split("AS")[0])){//Contains BETWEEN operator
+											operator = "～";
+											var valueTmp:Array = oW.split("AND");
+											value1 = formatStringData(valueTmp[0].toString().split(">=")[1].toString());
+											value2 = formatStringData(valueTmp[1].toString().split("<=")[1].toString());
+											
+											hasBW = true;
+											
+											break;
+										} 
+										else if(colInW == formatStringData(arrCol[1].toString().split("AS")[0])){
+											if(oW.search("~~") >= 0){//Contains LIKE operator
+												//LIKE 'value%'
+												//LIKE '%value%'
+												bFound = true;
+												foundCount++;
+												
+												if(operator == null){
+													var tmpS:String = 
+														replaceStringData
+														(	 
+															formatStringData(oW.split(".")[1].toString().split("~~")[1].toString()),
+															"'",
+															""
+														);
+														
+													if(tmpS.indexOf("%") > 0){																										
+														operator = "始まる";
+													}
+													else{
+														operator = "含む";
+													}
+												}
+												if(value1 == null){
+													value1 =
+														replaceStringData
+														(
+															replaceStringData
+															( 
+																formatStringData(oW.split(".")[1].toString().split("~~")[1].toString()),
+																"%",
+																""
+															),
+															"'",
+															""
+														);
+												}
+												if(foundCount == 2){
+													value2 = 
+														replaceStringData
+														(
+															replaceStringData
+															( 
+																formatStringData(oW.split(".")[1].toString().split("~~")[1].toString()),
+																"%",
+																""
+															),
+															"'",
+															""
+														);	
+												}
+											}
+											else{//Other operators
+												for each(var op:Object in newOp){
+													if(oW.search(op["data"]) >= 0){
+														bFound = true;
+														foundCount++;
+														
+														if(operator == null){
+															operator = op["label"];
+														}
+														if(value1 == null){
+															value1 = oW.split(op["data"])[1];
+														}
+														if(foundCount == 2){
+															value2 = oW.split(op["data"])[1];															
+														}
+		
+														break;			
+													}
+												}
+											}
+										}
+									}
+									if(foundCount == 2){
+										bFound = false;
+										foundCount = 0;
+										break;
+									}
+								}
+								
+								if(operator != null){
+									arrW = [
+												{
+													column: strColumnDescription, 
+													operator: operator, 
+													value1: value1,
+													value2: value2
+												}
+											];
+								}
+							}
+							
+							if(arrOrder != null){
+								for each(var oO:String in arrOrder){
+									bFound = false;
+									if(oO != ""){
+										var tmpCol:String = formatStringData(oO.split(".")[1].toString().replace("ASC", "").replace("DESC", ""));
+										var tmpCurCol:String = formatStringData(arrCol[1].toString().split("AS")[0]);
+	
+										if(oO.split(".")[0] == formatStringData(arrCol[0]) && tmpCol == tmpCurCol){
+											for each(var odr:Object in orders){
+												if(oO.search("ASC") < 0 && oO.search("DESC") < 0){
+													bFound = true;
+													order = orders[1]["label"];
+													break;	
+												}
+												if(oO.search(odr["data"]) >= 0 && odr["data"] != ""){													
+													bFound = true;
+													order = odr["label"];													
+													break;			
+												}
+											}
+										}	
+									}		
+									
+									if(bFound){
+										bFound = false;
+										break;
+									}															
+								}
+								
+								if(order != null){
+									arrO =
+									[
+										{
+											column:strColumnDescription,
+											order:order
+										}
+									];
+								}
+							}							
+							
+							addNewColumnForGrid(replaceStringData(formatStringData(arrCol[1].toString().split("AS")[0].toString()), '"', ""), strColumnDescription, formatStringData(arrCol[0].toString()), strTableDescription, _lastColAdd, arrW, arrO);							
+						}
+					}
+				}
+				this.btnRemove.enabled = true;
+			}
+
+			private function getGridColumnByMousePosition(Px:int):DataGridColumn
+			{
+				var iCount:int=-1;
+				var i:int;
+				var arrColumns:Array=gridProperties.columns;
+				for (i=0; i < arrColumns.length; i++)
+				{
+					var gridColumn:DataGridColumn=arrColumns[i] as DataGridColumn;
+					if (Px > 0)
+					{
+						iCount++;
+						Px=Px - gridColumn.width;
+					}
+					else
+					{
+						break;
+					}
+				}
+
+				if (iCount >= 0)
+				{
+					return arrColumns[iCount] as DataGridColumn;
+				}
+				else
+				{
+					return null;
+				}
+			}
+			
+			public function openSaveView():void
+			{
+				cursorManager.setBusyCursor();
+				isPreview = false;
+				isSave=true;
+				var objArgs:Object=this.getSQLView();
+
+				if (objArgs["sql"] == null || objArgs["sql"].toString() == "")
+				{					
+					var msg:HK_MsgBox = new HK_MsgBox(StyleMode.MsgWarning, HK_TitleWindow(this.parentDocument), "警告");
+					msg.message = "1個以上のテーブルからの1つ以上のコラムを選択してください。";
+					msg.open();
+					cursorManager.removeBusyCursor();
+					return;
+				}
+
+				if (objArgs != null)
+				{					
+					dispatchEvent(new OpenSaveDialogEvent(OpenSaveDialogEvent.openDialog, objArgs));
+					cursorManager.removeBusyCursor();
+				}				
+			}
+			
+			public function resetDesigner():void{
+				cursorManager.setBusyCursor();
+				this._strViewName="";
+				if(this.parent["document"]["tabNav"]["selectedIndex"] == 0){
+					this.parent["document"]["title"]="ビュー作成ツール: 無題_1";
+					this.parent["document"]["tabNav"]["selectedChild"]["label"] = "無題_1";
+				}
+				this.resetEntityDesign();
+				this.btnRemove.enabled = false;				
+			}
+			
+			public function addNewDesigner():void{				
+				dispatchEvent(new AddTabEvent(AddTabEvent.addTab));
+			}
+			
+			public function removeView(viewname:String=""):void{
+				cursorManager.setBusyCursor();
+				var objArgs:Object=new Object();
+				if(viewname == ""){
+					objArgs["viewname"]=this._strViewName;
+				}
+				else{
+					objArgs["viewname"]=viewname;
+					this._strViewName = viewname;
+				}
+				this.HKC31400J.deleteViewSql(new Array(objArgs));				
+			}
+			
+			public function _onResult_deleteViewSql(event:ResultEvent):void
+			{
+				var expData:Object = event.result;
+				var msg:HK_MsgBox;
+				if(expData != null){
+					this.resetDesigner();
+					cursorManager.removeBusyCursor();
+					msg = new HK_MsgBox(StyleMode.MsgInfo, HK_TitleWindow(this.parentDocument), "削除するビュー");
+					msg.message = "ビューが正常に削除された";
+					msg.open();																
+					dispatchEvent(new RemoveViewEvent(RemoveViewEvent.removeView));					
+				}
+				else{
+					cursorManager.removeBusyCursor();
+					msg = new HK_MsgBox(StyleMode.MsgError, HK_TitleWindow(this.parentDocument), "削除するビュー");
+					msg.message = "ビューを削除でのエラー";
+					msg.open();
+				}
+			} 
+			
+			private function checkExistViewNameSql():void{				
+				var obj:Object = new Object();
+				obj["viewname"] = _strViewName;
+				
+				var arr:Array = new Array();
+				arr.push(obj);
+				
+				this.HKC31400J.checkExistViewNameSql(arr);
+			}
+			
+			public function _onResult_checkExistViewNameSql(event:ResultEvent):void{
+				if(event.result == 1){
+					this.updateViewInfo();
+				}
+				else{
+					this.openSaveView();
+				}				
+			}
+			
+			public function btnViewAction_Click():void
+			{				
+				isPreview = false;
+				if (_strViewName != "")
+				{
+					isSave = false;
+					cursorManager.setBusyCursor();
+					checkExistViewNameSql();					
+				}
+				else
+				{
+					isSave = true;
+					openSaveView();
+				}				
+			}
+			
+			public function set dropTarget(value:DisplayObject):void{
+				this._dropTarget = value;
+			}
+			
+			public override function get dropTarget():DisplayObject{
+				return this._dropTarget;
+			}
+			
+			public function clickExecuteQuery():void{				
+				this.tabView.selectedIndex = 1;				
+				this.executeQuery();				
+			}
+		]]>
+	</mx:Script>
+	<mx:HBox id="rightPanel"
+				 width="100%"
+				 height="100%"
+				 borderStyle="solid"
+				 borderColor="#6593cf">
+			<mx:VBox id="topPanel"
+					 width="100%"
+					 height="100%"
+					 verticalGap="2">
+				<mx:HBox width="100%"
+						 height="30"
+						 paddingLeft="8"
+						 verticalAlign="middle"
+						 backgroundColor="#d9e9ff">
+					<mx:Button label="新"
+							   icon="@Embed(source='Image/New.png')"
+							   click="{this.addNewDesigner()}"/>
+					<mx:Button id="btnRemove" label="削除"
+							   enabled="false"
+							   click="{this.removeView()}"
+							   icon="@Embed(source='Image/Remove.png')"/>
+					<mx:Button id="btnSave" label="上書保存"
+							   click="{this.btnViewAction_Click()}"
+							   icon="@Embed(source='Image/Save.png')"/>
+					<mx:Button id="btnSaveAs" label="新規保存"
+							   click="{this.openSaveView()}"
+							   icon="@Embed(source='Image/SaveAs.png')"/>
+					<!--<mx:Button label="Open"
+						 icon="@Embed(source='Image/Open.png')"/>-->
+					<mx:Button id="btnExecute" label="実行"
+						       enabled="false"
+							   icon="@Embed(source='Image/Execute.png')"
+							   click="{this.clickExecuteQuery()}"/>
+					<mx:Button id="btnReset" label="リセット"
+							   icon="@Embed(source='Image/Reset.png')"
+							   click="{this.resetDesigner()}"/>
+				</mx:HBox>
+				<mx:TabNavigator id="tabView"
+								 width="100%"
+								 height="100%"
+								 paddingTop="0"
+								 change="{this.executeQuery()}">
+					<mx:VDividedBox label="デザイン"
+									width="100%"
+									height="100%"
+									verticalGap="2"
+									icon="@Embed(source='Image/Design.png')">
+						<mx:VDividedBox id="vbDesignGrid"
+										width="100%"
+										height="100%"
+										backgroundColor="#e8f1f9"
+										verticalGap="2">
+							<mx:HBox id="hbCanVas" 
+									 width="100%"
+									 height="100%">
+								<controls:EntityLayout id="entityView"
+												   width="100%"
+												   height="100%"							   
+												   doubleClickFieldEntity="onDblClickFieldEntity(event)" 
+												   backgroundColor="#FFFFFF" />
+							</mx:HBox>
+							<mx:VBox id="vbGrid" width="100%"
+									 height="210" verticalGap="2">
+								<mx:HBox width="100%"
+										 height="17"
+										 paddingRight="16" 
+										 horizontalAlign="right"
+										 backgroundColor="0xffffff">
+										<mx:Image width="16"
+												  id="imgCollGrid"
+												  click="{_btnCollDesign_Click()}"													  
+												  toolTip="隠す"
+												  source="com/controls/Image/CollDown.png"/>
+								</mx:HBox>
+								<mx:HDividedBox id="hDBox"
+												width="100%"
+												minHeight="185"
+												height="100%">
+									<mx:DataGrid id="gridTitle" 
+											width="100"
+											height="100%"
+											minWidth="100"						
+											maxWidth="200"
+											color="#000000"
+											enabled="false"			
+											rowHeight="26"
+											fontWeight="bold" />
+									<mx:DataGrid id="gridProperties"
+											 width="100%"
+											 height="100%"
+											 color="#000000"
+											 sortableColumns="false"					 	 
+										 	 draggableColumns="true"
+										 	 horizontalScrollPolicy="auto" 					 	 
+										 	 editable="true" 
+										 	 rowHeight="26"
+										 	 itemClick="itemGridIsClicked(event)"
+										 	 dragEnter="onDragEnter(event)"
+										 	 mouseUp="onGridMouseUp(event)"
+										 	 mouseOut="onGridMouseOut(event)" />
+					  			</mx:HDividedBox>
+							</mx:VBox>
+						</mx:VDividedBox>
+						<mx:VBox id="vbQuery"
+								 width="100%"
+								 height="20%" verticalGap="2"
+								 backgroundColor="#ffffff">
+							<mx:HBox width="100%"
+									 paddingLeft="8">
+								<!--<mx:Label text="Query"/>-->
+								<mx:HBox width="100%"
+										 height="16"
+										 horizontalAlign="right"
+										 paddingRight="15">
+									<mx:Image width="16"
+											  id="imgCollQuery"
+											  click="{_btnCollQuery_Click()}"
+											  toolTip="隠す"
+											  source="com/controls/Image/CollDown.png"/>
+								</mx:HBox>
+							</mx:HBox>
+							<mx:VBox width="100%"
+									 height="100%"
+									 verticalGap="2" >
+								<mx:TextArea id="txtSQL"
+									width="100%"
+									height="100%"	
+									paddingLeft="10"			
+									editable="false" />
+							</mx:VBox>
+						</mx:VBox>										
+					</mx:VDividedBox>
+					<mx:VDividedBox id="vbPreview"
+						     enabled="false"
+							 label="プレビュー"
+							 width="100%"
+							 height="100%"
+							 verticalGap="2"
+							 icon="@Embed(source='Image/Preview.png')">
+						<mx:VBox id="vbShowPreview"
+								 width="100%"
+								 height="100%">
+							<mx:DataGrid id="gridResult"
+								width="100%"
+								height="100%" />
+						</mx:VBox>
+						<!--Query-->
+
+						<mx:VBox id="vbPreviewQuery"
+								 width="100%"
+								 height="20%"
+								 verticalGap="2"
+								 backgroundColor="#ffffff">
+							<mx:ApplicationControlBar cornerRadius="0"
+													  fillAlphas="[1, 1]"
+													  fillColors="[#ffffff, #cccccc]"
+													  width="100%"
+													  height="20"														  
+													  verticalAlign="middle"
+													  paddingTop="0">
+								<mx:Label id="lblResult" text="レコード（秒）: 0"
+										  fontWeight="bold"/>
+								<mx:HBox width="100%"
+										 horizontalAlign="right">
+									<mx:HBox horizontalAlign="right"
+											 paddingRight="8">
+										<mx:Image width="16"
+												  id="imgPreCollQuery"
+												  click="{_btnPreCollQuery_Click()}"
+												  toolTip="隠す"
+												  source="com/controls/Image/CollDown.png"/>
+									</mx:HBox>
+								</mx:HBox>
+							</mx:ApplicationControlBar>
+							<mx:VBox width="100%"
+									 height="100%"
+									 verticalGap="2">
+								<mx:TextArea id="txtPreQuery"
+											 width="100%"
+											 height="100%"
+											 paddingLeft="10"
+											 editable="false"
+											 selectable="true"
+											 borderStyle="outset"/>
+							</mx:VBox>
+						</mx:VBox>
+					</mx:VDividedBox>
+				</mx:TabNavigator>
+			</mx:VBox>
+		</mx:HBox>
+</mx:Canvas>

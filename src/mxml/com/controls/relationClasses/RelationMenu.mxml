@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow width="606" height="234"
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	xmlns:hc="HK_Common.HK_Control.*"
+	xmlns:hs="HK_Common.HK_S2Flex2.*"
+	xmlns:ns1="com.controls.*"
+   layout="absolute"
+	creationComplete="creationCompleteHK_TitleWindow(event)"
+	title="関係情報" fontFamily="ＭＳ ゴシック" fontSize="14" borderColor="#004080" backgroundAlpha="1.0" alpha="1.0">
+	<mx:Metadata>
+    /**
+	* event
+	*/
+		
+    </mx:Metadata>
+	<mx:Script>
+	<![CDATA[
+		import mx.modules.ModuleManager;
+		import com.objects.data.JoinOperator;
+		import mx.managers.PopUpManager;
+		import com.controls.EntityPanel;
+		import com.managers.RelationManager;
+		import com.objects.EntityPoint;
+		import com.controls.baseClasses.EntityControl;
+		import mx.core.Application;
+		import mx.collections.ArrayCollection;
+		import mx.core.UIComponent;
+		import mx.events.FlexEvent;
+		import com.objects.data.Column;
+		import com.objects.data.Table;
+		import com.managers.IRelationManager;
+		import com.controls.EntityLayout;
+		<!--
+		************************************************************
+		***** Private 変数
+		************************************************************
+		-->
+		private var mdm:ModuleManager;
+		private var _relationRenderer:IRelationRenderer;
+		private var _arrEntityPanel:Array;
+		private var _arrDatasourceType:Array;
+		private var _objEntityPanel:EntityPanel;
+		private var _oldEntityPoint1:EntityPoint;
+		private var _oldEntityPoint2:EntityPoint;
+		
+		public function set objEntityPanel(obj:EntityPanel):void
+		{
+			_objEntityPanel = obj;
+		}
+		<!--
+		************************************************************
+		***** フォームイベント
+		************************************************************
+		-->
+		<!--============================================================-->
+		<!-- フォームが表示された時の処理                               -->
+		<!--============================================================-->
+		protected function creationCompleteHK_TitleWindow(event:FlexEvent):void 
+		{
+			this._initForm();
+		}
+		
+		<!--============================================================-->
+		<!-- 初期化処理                                                 -->
+		<!--============================================================-->
+		private function _initForm():void
+		{			
+			_setDatasource4CBOType();
+			_setDataSource4Table();
+ 		}
+				  
+		<!--=========================================================-->
+		<!--=Initial data-->
+		<!--=========================================================-->
+		
+		private function _setDatasource4CBOType():void
+		{
+			_arrDatasourceType = new Array;
+			var obj:Object = new Object();
+			obj["Type"] = "0";
+			_arrDatasourceType.push(obj);
+			obj = new Object();
+			obj["Type"] = "1";
+			_arrDatasourceType.push(obj);
+			obj = new Object();
+			obj["Type"] = "n";
+			_arrDatasourceType.push(obj);
+			
+			cboRelType1.labelField = "Type";
+			cboRelType1.dataProvider = _arrDatasourceType;
+			cboRelType2.labelField = "Type";
+			cboRelType2.dataProvider = _arrDatasourceType;
+		}	
+		
+		private function _setDataSource4Table():void
+		{
+			<!-- Begin XungNV added -->
+			var joinOp:String = this._relationRenderer.entitypoint1.joinOperator;
+			if(joinOp == JoinOperator.INNER_JOIN){
+				radInner.selected = true;
+			}
+			else if(joinOp == JoinOperator.LEFT_JOIN){
+				radLeft.selected = true;
+			}
+			else if(joinOp == JoinOperator.RIGHT_JOIN){
+				radRight.selected = true;
+			}
+			<!-- End XungNV added -->
+			
+			var entitylayout:EntityLayout = relationRenderer.relationManager["myHKTitleWindow"];
+			//_arrTable = entitylayout.getTables();
+			_arrEntityPanel = entitylayout.entityPanels;
+			var arrTables:Array = new Array();
+			var i:int;
+			for (i = 0;i< _arrEntityPanel.length;i++)
+			{
+				var obj:Object = new Object();
+				obj[Table.TABLENAME] = _arrEntityPanel[i][Table.TABLENAME];
+				obj[Table.TABLEDESCRIPTION] = _arrEntityPanel[i]["table"][Table.TABLEDESCRIPTION];
+				arrTables.push(obj);  
+			}
+						
+			cboTable1.labelField = Table.TABLEDESCRIPTION; 
+			cboTable1.dataProvider = arrTables;			
+			cboTable2.labelField = Table.TABLEDESCRIPTION; 
+			cboTable2.dataProvider = arrTables;
+			
+			//set selected table by entity point1 and point2 of _relationRenderer 
+			if (_relationRenderer!=null)
+			{
+				_oldEntityPoint1 = _relationRenderer.entitypoint1;
+				_oldEntityPoint2 = _relationRenderer.entitypoint2;
+				var strColumnName1:String = _oldEntityPoint1.columnName;			
+				var strColumnName2:String = _oldEntityPoint2.columnName;
+				var strRelationType1:String = _oldEntityPoint1.relationType.text;			
+				var strRelationType2:String = _oldEntityPoint2.relationType.text;
+				var strTableName1:String = _oldEntityPoint1.entity.entityPanel.table.Description;			
+				var strTableName2:String = _oldEntityPoint2.entity.entityPanel.table.Description;
+				_setSelectItemForCboTable(cboTable1,strTableName1);
+				_setSelectItemForCboTable(cboTable2,strTableName2);
+				_setDataSource4Column(cboTable1,cboColumn1,strColumnName1);
+				_setDataSource4Column(cboTable2,cboColumn2,strColumnName2);
+				_setSelectItemForCboType(cboRelType1,strRelationType1);
+				_setSelectItemForCboType(cboRelType2,strRelationType2);
+				chkVisibleRelType1.selected = _oldEntityPoint1.showRelationType;
+				chkVisibleRelType2.selected = _oldEntityPoint2.showRelationType;
+			}	
+			else
+			{
+				cboTable1.selectedIndex = 0;
+				cboTable2.selectedIndex = 0;
+				cboRelType1.selectedIndex = 0;
+				cboRelType2.selectedIndex = 0;
+				chkVisibleRelType1.selected = true;
+				chkVisibleRelType2.selected = true;	
+			}
+		}
+		
+		private function _setSelectItemForCboTable(cboTable:ComboBox,strSelectedTable:String):Boolean
+		{
+			var arrTmp:ArrayCollection = cboTable.dataProvider as ArrayCollection;
+			var i:int;
+			for (i=0;i<arrTmp.length;i++)
+			{
+				if (arrTmp[i][Table.TABLEDESCRIPTION] == strSelectedTable)
+				{
+					cboTable.selectedItem = arrTmp[i];
+					return true;		
+				}
+			}
+			return false;
+		}
+		
+		private function _setDataSource4Column(cboTable:ComboBox,cboColumn:ComboBox,strSelectedColumn:String = ""):void
+		{
+			var i:int;
+			var j:int;
+			var selectedTable:Object = cboTable.selectedItem;
+			var arrColumn:Array = new Array();
+			for (i = 0;i< _arrEntityPanel.length;i++)
+			{
+				if (_arrEntityPanel[i][Table.TABLENAME] == selectedTable[Table.TABLENAME])
+				{
+					var arrTmp:Array = _arrEntityPanel[i]["columns"];
+					for (j = 0;j< arrTmp.length;j++)
+					{
+						var obj:Object = new Object();
+						obj[Column.COLUMNNAME] = arrTmp[j][Column.COLUMNNAME];
+						obj[Column.COLUMNDESCRIPTION] = arrTmp[j][Column.COLUMNDESCRIPTION];
+						arrColumn.push(obj);  
+					}
+					cboColumn.labelField = Column.COLUMNDESCRIPTION;
+					cboColumn.dataProvider = arrColumn;
+					if (strSelectedColumn == "")
+					{
+						cboColumn.selectedIndex = 0;
+					}
+					else
+					{
+						_setSelectItemForCboColumn(cboColumn,strSelectedColumn); 
+					}
+					break;
+				}	
+			}
+		}
+		
+		private function _setSelectItemForCboColumn(cboColumn:ComboBox,strSelectedColumn:String):Boolean
+		{
+			var arrTmp:ArrayCollection = cboColumn.dataProvider as ArrayCollection;
+			var i:int;
+			for (i=0;i<arrTmp.length;i++)
+			{
+				if (arrTmp[i][Column.COLUMNNAME] == strSelectedColumn)
+				{
+					cboColumn.selectedItem = arrTmp[i];
+					return true;		
+				}
+			}
+			return false;
+		}
+		
+		private function _setSelectItemForCboType(cboType:ComboBox,strType:String):Boolean
+		{
+			var arrTmp:ArrayCollection = cboType.dataProvider as ArrayCollection;
+			var i:int;
+			for (i=0;i<arrTmp.length;i++)
+			{
+				if (arrTmp[i]["Type"] == strType)
+				{
+					cboType.selectedItem = arrTmp[i];
+					return true;		
+				}
+			}
+			return false;
+		}
+		
+		<!--=========================================================-->
+		<!--=Properties-->
+		<!--=========================================================-->		
+		/**
+		 * The IRelationManager with which this entity point is registered.
+		 */
+		public function get relationRenderer():IRelationRenderer
+		{
+			return this._relationRenderer;
+		}
+		
+		/**
+		 * @private
+		 */
+		public function set relationRenderer(value:IRelationRenderer):void
+		{
+			this._relationRenderer = value;
+			
+		}
+	
+		<!--=========================================================-->
+		<!--=Control Event-->
+		<!--=========================================================-->
+		private function cboTable1_Change():void
+		{
+			_setDataSource4Column(cboTable1,cboColumn1);	
+		}
+		
+		private function cboTable2_Change():void
+		{
+			_setDataSource4Column(cboTable2,cboColumn2);
+		}
+				
+		public function btnCancel_Click():void
+		{
+			PopUpManager.removePopUp(this);	
+		}
+		
+		public function btnCreateAsNew_Click():void
+		{
+			<!-- Begin XungNV added -->
+			var joinOp:String = JoinOperator.INNER_JOIN;
+			if(radInner.selected){
+				joinOp = JoinOperator.INNER_JOIN;
+			}			
+			else if(radLeft.selected){
+				joinOp = JoinOperator.LEFT_JOIN;
+			}
+			else if(radRight.selected){
+				joinOp = JoinOperator.RIGHT_JOIN;
+			}
+			<!-- End XungNV added -->
+			var entityPanel1:EntityPanel = _arrEntityPanel[cboTable1.selectedIndex];
+			var entityPanel2:EntityPanel = _arrEntityPanel[cboTable2.selectedIndex];
+			var startEntityControl:EntityControl = entityPanel1.entityControl;
+			var endEntityControl:EntityControl = entityPanel2.entityControl;
+			var startPoint:EntityPoint = new EntityPoint(startEntityControl, new Point(0, 0), cboColumn1.selectedIndex);
+			startPoint.columnName = cboColumn1.selectedItem[Column.COLUMNNAME];
+			startPoint.relationType.text = cboRelType1.text;
+			startPoint.showRelationType = chkVisibleRelType1.selected;						
+			startPoint.joinOperator = joinOp;//XungNV added
+			var endPoint:EntityPoint = new EntityPoint(endEntityControl, new Point(0, 0), cboColumn2.selectedIndex);
+			endPoint.columnName = cboColumn2.selectedItem[Column.COLUMNNAME];
+			endPoint.relationType.text = cboRelType2.text;
+			endPoint.showRelationType = chkVisibleRelType2.selected;
+			endPoint.joinOperator = joinOp;//XungNV added
+			var relationmanager:IRelationManager = relationRenderer.relationManager;
+			relationmanager.connect(startPoint, endPoint);	
+			_oldEntityPoint1 = startPoint;
+			_oldEntityPoint2 = endPoint;								
+		}
+		
+		public function btnOK_Click():void
+		{
+			if (_oldEntityPoint1 != null && _oldEntityPoint2 != null)
+			{
+				var relationmanager:IRelationManager = relationRenderer.relationManager;
+				relationmanager.disconnect(_oldEntityPoint1, _oldEntityPoint2);
+			}
+			btnCreateAsNew_Click()			
+		}
+		]]>
+	</mx:Script>	
+	
+	<mx:Label text="ポイントA" fontWeight="bold" x="140" y="8" fontFamily="ＭＳ ゴシック" fontSize="14"/>
+	<mx:Label text="ﾃｰﾌﾞﾙ" width="70" x="12" y="38" textAlign="right"/>
+	<mx:ComboBox id="cboTable1" width="177" change="cboTable1_Change()" x="87" y="33"></mx:ComboBox>
+	<mx:ComboBox id="cboColumn1" width="177" x="87" y="62"></mx:ComboBox>
+	<mx:Label text="関係ﾀｲﾌﾟ" width="63" x="21" y="94" textAlign="right"/>
+	<mx:ComboBox id="cboRelType1" width="177" x="87" y="91"></mx:ComboBox>
+	<mx:CheckBox id="chkVisibleRelType1" label="目に見える" width="110" x="92" y="120"/>
+	<mx:Label text="ポイント B" fontWeight="bold" x="430" y="6"/>
+	<mx:Label text="ﾃｰﾌﾞﾙ" width="70" x="305" y="34" textAlign="right"/>
+	<mx:ComboBox id="cboTable2" width="183" change="cboTable2_Change()" x="378" y="31"></mx:ComboBox>
+	<mx:ComboBox id="cboColumn2" width="183" x="378" y="60"></mx:ComboBox>
+	<mx:Label text="関係ﾀｲﾌﾟ" width="70" x="304" y="92" textAlign="right"/>
+	<mx:ComboBox id="cboRelType2" width="183" x="378" y="89"></mx:ComboBox>
+	<mx:CheckBox id="chkVisibleRelType2" label="目に見える" x="384" y="118"/>
+	
+	<mx:Button id="btnCreateAsNew" label="追加" width="80" click="{btnCreateAsNew_Click()}" 
+		fontSize="14" fontFamily="ＭＳ ゴシック" x="434" y="156" visible="false"/>
+	<mx:Button id="btnOK" label="保存" width="80" click="{btnOK_Click()}" fontSize="14" 
+		fontFamily="ＭＳ ゴシック" x="393" y="152"/>
+	<mx:Button	label="戻る"	id="btnEnd"	click="{btnCancel_Click()}"  focusEnabled="false" 
+		fontFamily="ＭＳ ゴシック" fontSize="14" width="80" x="481" y="152"/>
+	<mx:Label text="列名" width="70" x="12" y="63" textAlign="right"/>
+	<mx:Label text="列名" width="70" x="300" y="61" textAlign="right"/>
+	<mx:RadioButton id="radInner" x="92" y="153" label="内部結合" width="90" selected="true"/>
+	<mx:RadioButton id="radLeft" x="190" y="153" label="左外部結合 " width="102"/>
+	<mx:RadioButton id="radRight" x="300" y="153" label="右結合" width="77"/>
+	
+</mx:TitleWindow>

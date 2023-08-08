@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	 ********************************************************************************
+	 ================================================================================
+	 DB View
+	 ================================================================================
+	 Program Number  : HKC31430.mxml
+	 Program Name    : View data sql(SQL表示)
+	 Program Date    : 2009/04/25
+	 Programmer      : linhnq
+
+	 ===< Update History >===========================================================
+	 2009/04/25:Start											         = linhnq
+	 ================================================================================
+	 ********************************************************************************
+-->
+
+<hc:HK_TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				   xmlns:hc="HK_Common.HK_Control.*"
+				   xmlns:hs="HK_Common.HK_S2Flex2.*"
+				   xmlns:s2="http://www.seasar.org/s2flex2/mxml"
+				   creationComplete="creationCompleteHK_TitleWindow(event)"
+				   showHelpButton="true"
+				   layout="absolute"
+				   width="658"
+				   height="389"
+				   title="SQL表示"
+				   closingMessage="true"
+				   styleMode="help"
+				   xmlns:ns1="com.controls.*" 
+				   storeWindowSize="true" 
+				   resizable="true">
+
+	<hs:HK_S2Flex2Service id="HKC31400J"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<mx:Script>
+		<![CDATA[
+			import mx.core.Application;
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import HK_Common.HK_Control.HK_ControlCnst.ReadState;
+			import HK_Common.HK_Data.*
+			import HK_Common.HK_S2Flex2.*;
+			import mx.collections.*;
+			import mx.controls.dataGridClasses.*;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+
+			<!--
+		************************************************************
+		***** Private 変数
+		************************************************************
+		-->
+			private var mdm:HK_ModuleManager;
+			private var strSQL:String;
+			[Bindable]
+			private var arrQuery:Array;
+			<!--
+		************************************************************
+		***** フォームイベント
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- フォームが表示された時の処理                               -->
+			<!--============================================================-->
+
+			protected function creationCompleteHK_TitleWindow(event:FlexEvent):void
+			{
+				this._initForm();
+				var obj:Object=this.helpCode;
+				var strSQL:String=obj["sql"].toString();
+				txtSQL.text=strSQL;
+			}
+
+			<!--============================================================-->
+			<!-- GridでのKeyDownが発生したとき                              -->
+			<!--============================================================-->
+
+			override public function keyDownCell(event:KeyboardEvent):void
+			{
+
+			}
+
+			<!--
+        ************************************************************
+        ***** SubForm イベント
+        ************************************************************
+        -->
+			<!--============================================================-->
+			<!-- 検索マークがクリックされた時の処理                         -->
+			<!--============================================================-->
+
+			override public function clickHelp(uicCtrl:UIComponent):void
+			{
+
+				return;
+			}
+
+			<!--=============================================================-->
+			<!-- 子フォームが閉じられ、自フォームへFocusが戻ってきた時の処理 -->
+			<!--=============================================================-->
+
+			override public function closeSubWindow(tlwWindow:HK_TitleWindow, uicInputControl:UIComponent):void
+			{
+			}
+
+			<!--
+		************************************************************
+		***** ボタンイベント
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- 読込ボタンを押下した時の処理                               -->
+			<!--============================================================-->
+
+			private function _clickBtnRunSQL():void
+			{
+				var objArgs:Object=this.helpCode;
+				objArgs["sql"]=txtSQL.text;
+				this.mdm=new HK_ModuleManager;
+				this.mdm.showWindow("HKC31420.swf", this, null, objArgs);
+			}
+
+			<!--============================================================-->
+			<!-- 終了ボタンを押下した時の処理                               -->
+			<!--============================================================-->
+
+			private function _clickBtnEnd():void
+			{
+				this.close();
+			}
+
+			<!--
+		************************************************************
+		***** Private メソッド
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- 初期化処理                                                 -->
+			<!--============================================================-->
+
+			private function _initForm():void
+			{
+				var objArgs:Object=new Object();
+			}
+		]]>
+	</mx:Script>
+	<hc:HK_TextArea id="txtSQL"
+					left="0" right="0" top="0" bottom="40"
+					tabChildren="true"
+					tabEnabled="true" 
+					enterKeyFunction="newline"
+					/>
+	<hc:HK_Button id="btnEnd"
+				  label="戻る"
+				  focusEnabled="false"
+				  icon2="return"
+				  functionKey="F12"
+				  click="_clickBtnEnd()"
+				  shortCutKey="end"
+				  tabIndex="11"
+				  right="6"
+				  bottom="6"/>
+	<hc:HK_Button id="btnRunSQL"
+				  label="SQL実行"
+				  focusEnabled="false"
+				  click="{_clickBtnRunSQL()}"
+				  tabIndex="11"
+				  right="88"
+				  bottom="6"/>
+</hc:HK_TitleWindow>

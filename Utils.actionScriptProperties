@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<actionScriptProperties mainApplicationPath="AIRTool.mxml" version="3">
+<compiler additionalCompilerArguments="-locale ja_JP -debug=true" copyDependentFiles="true" enableModuleDebug="true" flexSDK="Flex 3.1" generateAccessible="true" htmlExpressInstall="true" htmlGenerate="false" htmlHistoryManagement="false" htmlPlayerVersion="9.0.28" htmlPlayerVersionCheck="true" outputFolderPath="webapp/swf" sourceFolderPath="src/mxml" strict="true" useApolloConfig="true" verifyDigests="false" warn="true">
+<compilerSourcePath/>
+<libraryPath defaultLinkType="1">
+<libraryPathEntry kind="4" path=""/>
+<libraryPathEntry autoExtract="true" kind="3" linkType="3" path="libs/HK_Common.swc" rslUrl="HK_Common.swf" useDefaultLinkType="false"/>
+<libraryPathEntry kind="3" linkType="1" path="libs/s2flex2-components.swc" useDefaultLinkType="false"/>
+</libraryPath>
+<sourceAttachmentPath/>
+</compiler>
+<applications>
+<application path="AIRTest.mxml"/>
+<application path="HKC31410.mxml"/>
+<application path="HKC31420.mxml"/>
+<application path="AIRTool.mxml"/>
+<application path="HKC31400.mxml"/>
+</applications>
+<modules>
+<module application="src/mxml/AIRTool.mxml" destPath="AIRTool00000.swf" optimize="true" sourcePath="src/mxml/AIRTool00000.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="AIRTool00001.swf" optimize="true" sourcePath="src/mxml/AIRTool00001.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="AIRTool00000_Window.swf" optimize="true" sourcePath="src/mxml/AIRTool00000_Window.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="HKC31400.swf" optimize="true" sourcePath="src/mxml/HKC31400.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="HKC31410.swf" optimize="true" sourcePath="src/mxml/HKC31410.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="HKC31420.swf" optimize="true" sourcePath="src/mxml/HKC31420.mxml"/>
+
+<module application="src/mxml/AIRTool.mxml" destPath="MFUC12110.swf" optimize="true" sourcePath="src/mxml/MFUC12110.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUC12310.swf" optimize="true" sourcePath="src/mxml/MFUC12310.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK11210.swf" optimize="true" sourcePath="src/mxml/MFUK11210.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK11310.swf" optimize="true" sourcePath="src/mxml/MFUK11310.mxml"/>
+
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK11410.swf" optimize="true" sourcePath="src/mxml/MFUK11410.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK11530.swf" optimize="true" sourcePath="src/mxml/MFUK11530.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK25210.swf" optimize="true" sourcePath="src/mxml/MFUK25210.mxml"/>
+
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43100.swf" optimize="true" sourcePath="src/mxml/MFUK43100.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43120.swf" optimize="true" sourcePath="src/mxml/MFUK43120.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43130.swf" optimize="true" sourcePath="src/mxml/MFUK43130.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43200.swf" optimize="true" sourcePath="src/mxml/MFUK43200.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43210.swf" optimize="true" sourcePath="src/mxml/MFUK43210.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43220.swf" optimize="true" sourcePath="src/mxml/MFUK43220.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43230.swf" optimize="true" sourcePath="src/mxml/MFUK43230.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43240.swf" optimize="true" sourcePath="src/mxml/MFUK43240.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43300.swf" optimize="true" sourcePath="src/mxml/MFUK43300.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43310.swf" optimize="true" sourcePath="src/mxml/MFUK43310.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43320.swf" optimize="true" sourcePath="src/mxml/MFUK43320.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43330.swf" optimize="true" sourcePath="src/mxml/MFUK43330.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK43340.swf" optimize="true" sourcePath="src/mxml/MFUK43340.mxml"/>
+<module application="src/mxml/AIRTool.mxml" destPath="MFUK62110.swf" optimize="true" sourcePath="src/mxml/MFUK62110.mxml"/>
+
+</modules>
+<buildCSSFiles/>
+</actionScriptProperties>

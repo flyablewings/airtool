@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	 ********************************************************************************
+	 ================================================================================
+	 テーブルリスト
+	 ================================================================================
+	 Program Number  : HKC31460.mxml
+	 Program Name    : View tool table list(ビュー読込)
+	 Program Date    : 2009/04/10
+	 Programmer      : linhnq
+
+	 ===< Update History >===========================================================
+	 2009/04/10:Start											         = linhnq
+	 ================================================================================
+	 ********************************************************************************
+-->
+
+<hc:HK_TitleWindow showHelpButton="true"
+				   layout="absolute"
+				   width="244"
+				   height="325"
+				   title="ビュー読込"
+				   closingMessage="true"
+				   styleMode="help"
+				   xmlns:mx="http://www.adobe.com/2006/mxml"
+				   xmlns:hc="HK_Common.HK_Control.*"
+				   xmlns:hs="HK_Common.HK_S2Flex2.*"
+				   xmlns:newList="com.controls.list.*"
+				   xmlns:ns1="com.controls.*"
+				   creationComplete="creationCompleteHK_TitleWindow(event)" resizable="true" storeWindowSize="true">
+	<hs:HK_S2Flex2Service id="HKC31400J"
+						  destination="HKC31400"
+						  owner="{this}"/>
+	<mx:Script>
+		<![CDATA[
+			import com.objects.data.Table;
+			import com.objects.data.Column;
+			import mx.rpc.soap.WebService;
+			import mx.rpc.events.FaultEvent;
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Control.HK_ControlCnst.*;
+			import HK_Common.HK_Control.HK_ControlCnst.ReadState;
+			import HK_Common.HK_Data.*
+			import HK_Common.HK_S2Flex2.*;
+			import mx.collections.*;
+			import mx.controls.*;
+			import mx.controls.dataGridClasses.*;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+			private var _arrAllItems:Array;
+			<!--
+		************************************************************
+		***** Private 変数
+		************************************************************
+		-->
+			private var mdm:HK_ModuleManager;
+
+			<!--
+		************************************************************
+		***** フォームイベント
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- フォームが表示された時の処理                               -->
+			<!--============================================================-->
+
+			protected function creationCompleteHK_TitleWindow(event:FlexEvent):void
+			{
+				this._initForm();
+			}
+
+			<!--============================================================-->
+			<!-- GridでのKeyDownが発生したとき                              -->
+			<!--============================================================-->
+
+			override public function keyDownCell(event:KeyboardEvent):void
+			{
+			}
+
+			<!--
+        ************************************************************
+        ***** SubForm イベント
+        ************************************************************
+        -->
+			<!--============================================================-->
+			<!-- 検索マークがクリックされた時の処理                         -->
+			<!--============================================================-->
+
+			override public function clickHelp(uicCtrl:UIComponent):void
+			{
+
+				return;
+			}
+
+			<!--=============================================================-->
+			<!-- 子フォームが閉じられ、自フォームへFocusが戻ってきた時の処理 -->
+			<!--=============================================================-->
+
+			override public function closeSubWindow(tlwWindow:HK_TitleWindow, uicInputControl:UIComponent):void
+			{
+
+			}
+
+			<!--============================================================-->
+			<!-- 終了ボタンを押下した時の処理                               -->
+			<!--============================================================-->
+
+			private function _clickBtnEnd():void
+			{
+				this.close();
+			}
+
+			<!--
+		************************************************************
+		***** Private メソッド
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- 初期化処理                                                 -->
+			<!--============================================================-->
+
+			private function _initForm():void
+			{
+				var objArgs:Object=new Object();
+				//objArgs["tablename"] = tablenames;
+				this.HKC31400J.readViewSql(new Array(objArgs));
+			}
+
+			public function _onResult_readViewSql(event:ResultEvent):void
+			{
+				var arrViews:Array=event.result as Array;
+				_arrAllItems=arrViews[1];
+				this.listView.dataProvider=_arrAllItems;
+				this.setAllEnabled();
+			}
+
+			<!--============================================================-->
+			<!-- Gridのデータチェック処理(this.checkAllData()でも動作)     -->
+			<!--============================================================-->
+
+			override public function checkInputDataGrid(grd:HK_DataGrid, dgcActive:HK_DataGridCell, numRowIndex:Number, strDataField:String):String
+			{
+
+				return "";
+			}
+
+			<!--============================================================-->
+			<!-- Grid:1件のレコ一ドも入力されていない場合                   -->
+			<!--============================================================-->
+
+			private function _checkIsBlankGrid():Boolean
+			{
+				return false;
+			}
+
+
+			<!--=================================================================-->
+			<!-- 各コントロールのデータチェック処理(this.checkAllData()でも動作) -->
+			<!--=================================================================-->
+
+			override public function checkGridRemote(grd:HK_DataGrid, numRowIndex:Number, strDataField:String):String
+			{
+
+				return "";
+			}
+
+			<!--============================================================-->
+			<!-- [Grid]データベースとの照合終了処理                         -->
+			<!--============================================================-->
+
+			override public function checkGridRemoteData(grd:HK_DataGrid, numRowIndex:Number, strDataField:String, event:ResultEvent):String
+			{
+
+				return "";
+			}
+
+			<!--
+		************************************************************
+		***** データベースアクセス
+		************************************************************
+		-->
+			<!--============================================================-->
+			<!-- 読込処理                                                   -->
+			<!--============================================================-->
+
+			private function _onDblClickList():void
+			{
+				loadView();
+			}
+
+			private function _clickBtnLoad():void
+			{
+				loadView();
+			}
+
+			//tablenames: list of table names separated by "," if have only one, it's is table name
+			private function loadView():void
+			{
+				var objArg:Object=listView.selectedItem;
+				if (objArg != null)
+				{
+					var p:Object=this.owner;
+					if (p!=null)
+					{
+						p["entityDesign"]["_strViewName"] = objArg["viewname"];
+						p["loadView"](objArg);
+					}
+				}
+				_clickBtnEnd();
+			}
+		]]>
+	</mx:Script>
+	<hc:HK_Button id="btnLoad"
+				  label="読込"
+				  click="_clickBtnLoad()"
+				  enableTime="readbefore"
+				  tabIndex="3"
+				  tabEnabled="true"
+				  shortCutKey="read"
+				  left="6"
+				  bottom="6" icon2="read"/>
+	<hc:HK_Button id="btnEnd"
+				  label="戻る"
+				  focusEnabled="false"
+				  icon2="return"
+				  functionKey="F12"
+				  click="_clickBtnEnd()"
+				  shortCutKey="end"
+				  tabIndex="11"
+				  right="6"
+				  bottom="6"/>
+	<mx:List id="listView"
+			 labelField="viewname"
+			 left="0"
+			 right="0"
+			 top="0"
+			 bottom="37"
+			 color="#000000"
+			 allowMultipleSelection="false"
+			 doubleClickEnabled="true"
+			 doubleClick="_onDblClickList()">
+	</mx:List>
+</hc:HK_TitleWindow>

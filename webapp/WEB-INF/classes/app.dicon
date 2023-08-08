@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE components PUBLIC "-//SEASAR//DTD S2Container 2.4//EN"
+	"http://www.seasar.org/dtd/components24.dtd">
+<components>
+	<include path="convention.dicon"/>
+	<include path="aop.dicon"/>
+	<include path="dao.dicon"/>
+	<include path="dxo.dicon"/>
+	<include path="remoting_amf3.dicon"/>
+
+<component
+    class="org.seasar.framework.container.autoregister.FileSystemComponentAutoRegister">
+    <property name="autoNaming">
+		<component class="org.seasar.framework.container.autoregister.DefaultAutoNaming">
+	    	<initMethod name="clearReplaceRule"/>
+		</component>
+	</property>
+    <property name="instanceDef">
+    	@org.seasar.framework.container.deployer.InstanceDefFactory@REQUEST
+    </property>
+    <initMethod name="addClassPattern">
+      <arg>"airtool"</arg>
+      <arg>"[^$]*"</arg>
+    </initMethod>
+    <initMethod name="addClassPattern">
+      <arg>"hkc"</arg>
+      <arg>"[^$]*"</arg>
+    </initMethod>
+    <initMethod name="addClassPattern">
+      <arg>"mfuc"</arg>
+      <arg>"[^$]*"</arg>
+    </initMethod>
+    <initMethod name="addClassPattern">
+      <arg>"mfuk"</arg>
+      <arg>"[^$]*"</arg>
+    </initMethod>
+    
+  </component>
+</components>

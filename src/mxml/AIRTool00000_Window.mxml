@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+********************************************************************************
+================================================================================
+ログインWindow
+================================================================================
+Program Number  : AIRTool00000_Window_.mxml
+Program Name    : ログインWindow
+Program Date    : 2009/01/05
+Programmer      : T.Ogawa
+
+===< Update History >===========================================================
+2009/01/05 : 新規作成
+2009/04/02 : swfファイルの保存先をStorageDirectoryに変更            = T.Ogawa
+================================================================================
+********************************************************************************
+-->
+<hc:HK_ModuleWindow xmlns:hc="HK_Common.HK_Control.*"
+					xmlns:mx="http://www.adobe.com/2006/mxml"
+					initialize="_initializeHandler(event)"
+					creationComplete="creationCompleteHandler(event)"
+					systemChrome="none"
+					type="normal"
+					layout="absolute"
+					maximizable="false"
+					minimizable="false"
+					showGripper="false"
+					showStatusBar="false"
+					resizable="false"
+					visible="false"
+					width="0" height="0"
+					titleBarColors="[0x004080, 0x004080]"
+					borderColor="0x004080"
+					borderStyle="solid"
+					transparent="true">
+	
+	<mx:Style>
+		.titleTextStyle {
+			font-size: 14;
+			font-family: "ＭＳ ゴシック";
+			font-weight: bold;
+			color: "0xFFFFFF";
+		}
+	</mx:Style>
+	
+	<mx:Script>
+		<![CDATA[
+			import HK_Common.HK_Control.*;
+			import HK_Common.HK_Data.HK_Global;
+			import HK_Common.HK_IO.HK_DBSettings;
+			
+			import mx.core.*;
+			import mx.events.*;
+			import mx.modules.*;
+			
+			private var _mdm:IModuleInfo;
+			private var _childTitleWindow:HK_TitleWindow;
+			private var _timer:Timer;
+			
+			/***** 2009/04/02 INSERT START *****/
+			private var _blnDebug:Boolean;
+			/***** 2009/04/02 INSERT E N D *****/
+			
+			private const CNST_LOGIN_WINDOW:String = "AIRTool00000.swf";
+			
+			/************************************************************
+			 ***** イベントハンドラー(this)
+			 ************************************************************/
+			
+			
+			protected function _initializeHandler(event:FlexEvent):void {
+				var strClientBaseDir:String;
+				var dbsettings:HK_DBSettings;
+				
+				this._blnDebug = this.data["debug"];
+				
+				//タイトルバー設定
+				this.titleBarFactory = new ClassFactory(HK_WindowTitleBar);
+				
+				//フォーカスマネージャー設定
+				this.focusManager = new HK_FocusManager(this);
+				
+				//データベース接続情報をiniファイルから取得、グローバル変数へ格納
+				strClientBaseDir = HK_ControlLib.getSwfDirPath(this._blnDebug);
+				dbsettings = new HK_DBSettings(strClientBaseDir + "/config/dbsettings_client.ini");
+				HK_Global.setKeyValue(HK_Global.DB_SETTINGS, dbsettings);
+			}
+			
+			/**
+			 * コンポーネントの構築、プロパティ処理、測定、レイアウト、および描画が完了したときの処理
+			 */
+			private function creationCompleteHandler(event:FlexEvent):void {
+				//ログイン画面読込
+				/***** 2009/04/02 UPDATE START *****/
+				//this._mdm = ModuleManager.getModule(CNST_LOGIN_WINDOW);
+				//this._mdm.addEventListener(ModuleEvent.READY, moduleReadyHandler);
+				//this._mdm.load();
+				
+				if (this._blnDebug) {
+					this._mdm = ModuleManager.getModule(CNST_LOGIN_WINDOW);
+					this._mdm.addEventListener(ModuleEvent.READY, moduleReadyHandler);
+					this._mdm.load();
+				} else {
+					var loader:URLLoader = new URLLoader();
+					loader.dataFormat = URLLoaderDataFormat.BINARY;
+					loader.addEventListener(Event.COMPLETE, this._moduleLoadedCompleteHandler);
+					loader.load(new URLRequest("app-storage:/" + CNST_LOGIN_WINDOW))
+				}
+				/***** 2009/04/02 UPDATE E N D *****/
+			}
+			
+			/***** 2009/04/02 INSERT START *****/
+			private function _moduleLoadedCompleteHandler(e:Event) : void {
+				var loader:URLLoader = URLLoader(e.target);
+				var data:ByteArray = ByteArray(loader.data);
+				var moduleLoader:Loader = new Loader();
+				var context:LoaderContext = new LoaderContext();
+				context.allowLoadBytesCodeExecution = true;
+				context.applicationDomain = ApplicationDomain.currentDomain;    
+				
+				moduleLoader.loadBytes(data, context);
+				moduleLoader.contentLoaderInfo.addEventListener(Event.COMPLETE, _completeLoader);
+			}
+			
+			private function _completeLoader(e:Event): void {
+				var moduleLoader:LoaderInfo = LoaderInfo(e.target);
+				moduleLoader.content.addEventListener("ready", moduleReadyHandler);
+			}
+			/***** 2009/04/02 INSERT E N D *****/
+			
+			/************************************************************
+			 ***** イベントハンドラー(TitleWindow)
+			 ************************************************************/
+			/**
+			 * コンポーネントの構築、プロパティ処理、測定、レイアウト、および描画が完了したときの処理
+			 */
+			private function titleWin_creationCompleteHandler(event:FlexEvent):void {
+				this.title = this._childTitleWindow.title;
+				
+				//スタイル設定
+				this._childTitleWindow.setStyle("borderStyle","none");
+				this._childTitleWindow.setStyle("headerHeight","0");
+				this._childTitleWindow.setStyle("paddingBottom","0");
+				this._childTitleWindow.setStyle("paddingLeft","0");
+				this._childTitleWindow.setStyle("paddingRight","0");
+				this._childTitleWindow.setStyle("paddingTop","0");
+				this._childTitleWindow.setStyle("borderThicknessBottom","0");
+				this._childTitleWindow.setStyle("borderThicknessLeft","0");
+				this._childTitleWindow.setStyle("borderThicknessRight","0");
+				this._childTitleWindow.setStyle("borderThicknessTop","0");
+				this._childTitleWindow.setStyle("borderColor","#ffffff");
+				
+				//TitleWindowの枠分のサイズを減らす
+				this._childTitleWindow.width  = this._childTitleWindow.width - 8;
+				this._childTitleWindow.height = this._childTitleWindow.height - 43;
+				
+				//WindowサイズをTitleWindowに合わせる
+				this.width  = this._childTitleWindow.width  + 2  + this.getStyle("borderThickness");
+				this.height = this._childTitleWindow.height + 27 + this.getStyle("borderThickness");
+				
+				//高さを調整
+				this.height = this.height + 3;
+				
+				//表示位置の設定
+				if (this._childTitleWindow.showCenter) {
+					var winX:Number = (Capabilities.screenResolutionX / 2) - (this.width / 2);
+					var winY:Number = (Capabilities.screenResolutionY / 2) - (this.height / 2);
+					this.move(winX, winY);
+				}
+				
+				//画面表示タイマー設定
+				this._timer = new Timer(50);
+				this._timer.addEventListener(TimerEvent.TIMER, this._timerHandler);
+				this._timer.start();
+				
+			}
+			
+			/************************************************************
+			 ***** イベントハンドラー(Timer)
+			 ************************************************************/
+			/**
+			 * Timer オブジェクトが指定された時間間隔に達したときの処理
+			 */
+			private function _timerHandler(e:TimerEvent):void {
+				this._timer.stop();
+				this.visible = true;
+				this.activate();
+			}
+			
+			/************************************************************
+			 ***** カスタムメソッド
+			 ************************************************************/
+			/**
+			 * TitleWindow を表示する処理
+			 */		
+			private function moduleReadyHandler(event:Event):void {
+				
+				/***** 2009/04/02 UPDATE START *****/
+				//this._childTitleWindow = HK_TitleWindow(this._mdm.factory.create());
+				if (this._blnDebug) {
+					this._childTitleWindow = HK_TitleWindow(this._mdm.factory.create());
+				} else {
+					var factory:IFlexModuleFactory = IFlexModuleFactory(event.target);
+					this._childTitleWindow = HK_TitleWindow(factory.create());
+				}
+				/***** 2009/04/02 UPDATE E N D *****/
+				
+				//イベント関連付け
+				this._childTitleWindow.addEventListener(FlexEvent.CREATION_COMPLETE, this.titleWin_creationCompleteHandler);
+				
+				this.addChild(this._childTitleWindow);
+			}
+			
+		]]>
+	</mx:Script>
+	
+</hc:HK_ModuleWindow>
